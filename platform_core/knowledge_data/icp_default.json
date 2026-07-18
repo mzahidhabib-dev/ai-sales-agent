@@ -1,0 +1,6 @@
+{
+  "target_roles": ["CTO", "VP Engineering", "Engineering Manager"],
+  "target_industries": ["B2B SaaS", "Tech", "Fintech"],
+  "company_size_min": 50,
+  "company_size_max": 1000
+}

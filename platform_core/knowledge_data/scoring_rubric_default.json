@@ -1,0 +1,8 @@
+{
+  "threshold": 70,
+  "criteria": {
+    "role_match": { "weight": 30, "description": "Is the person a decision maker?" },
+    "company_match": { "weight": 30, "description": "Does the company match ICP size and industry?" },
+    "buying_signal": { "weight": 40, "description": "Are they hiring, raising money, or showing intent?" }
+  }
+}
