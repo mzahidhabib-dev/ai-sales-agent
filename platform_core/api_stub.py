@@ -8,16 +8,26 @@ class APIStub:
     Simulates the external HTTP API of the platform.
     In Phase 7, this will be replaced with a real FastAPI server.
     """
-    def webhook_resolve_decision(self, payload: dict) -> dict:
+    def webhook_resolve_decision(self, **kwargs) -> dict:
         """
         Simulates an HTTP POST route handling a webhook from a UI or Slack.
-        Expected payload format:
-        {
-            "decision_id": int,
-            "status": "APPROVED" | "REJECTED" | "EDITED",
-            "new_result": "Optional edited text"
-        }
+        Expected kwargs:
+        - payload: dict with "decision_id", "status", "new_result"
+        - payload_bytes: raw bytes of the request
+        - signature_header: The 'X-Signature' header
         """
+        payload = kwargs.get("payload", {})
+        payload_bytes = kwargs.get("payload_bytes", b"")
+        signature_header = kwargs.get("signature_header", "")
+        
+        # Phase 5.6: Enforce signature verification
+        from platform_core.security import verify_webhook_signature, get_secret
+        # We assume n8n secret is configured in secrets manager
+        secret = get_secret("WEBHOOK_SECRET", default="stub_secret_123")
+        
+        if not verify_webhook_signature(payload_bytes, signature_header, secret):
+            return {"status": 401, "message": "Unauthorized: Invalid webhook signature"}
+            
         decision_id = payload.get("decision_id")
         status = payload.get("status")
         new_result = payload.get("new_result")
@@ -41,7 +51,14 @@ class APIStub:
             )
             return {"status": 200, "message": "Decision successfully resolved."}
         except Exception as e:
-            logger.error("API Stub failed to process webhook", extra={"error": str(e)})
+            logger.error(
+                "API Stub failed to process webhook", 
+                extra={
+                    "exc_type": type(e).__name__, 
+                    "error": str(e),
+                    "catch_reason": "Catching general exception in API route to return 500"
+                }
+            )
             return {"status": 500, "message": f"Internal Server Error: {str(e)}"}
 
 api = APIStub()

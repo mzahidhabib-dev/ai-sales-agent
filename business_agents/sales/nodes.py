@@ -13,10 +13,9 @@ Rules compliance:
 """
 
 from platform_core.sdk import sdk
-from platform_core.logging_config import get_logger
 from typing import Any
 
-logger = get_logger(__name__)
+logger = sdk.get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -212,7 +211,8 @@ def ResearchAgent(state: dict) -> dict:
         logger.warning(f"ResearchAgent: failed to read memory: {e}")
         memory_context = ""
 
-    prompt = f"Summarize this research concisely: {raw_research}{memory_context}"
+    safe_research = sdk.security.sanitize_input(raw_research)
+    prompt = f"Summarize this research concisely: {safe_research}{memory_context}"
     ai_res = sdk.ai.generate(prompt)
 
     # Rule 9/12: Must check valid before using output

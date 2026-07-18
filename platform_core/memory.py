@@ -24,7 +24,13 @@ def get(tenant_id: str, prospect_id: int) -> dict:
     except Exception as e:
         logger.error(
             "Failed to retrieve memory",
-            extra={"tenant_id": tenant_id, "prospect_id": prospect_id, "error": str(e)}
+            extra={
+                "tenant_id": tenant_id, 
+                "prospect_id": prospect_id, 
+                "exc_type": type(e).__name__, 
+                "error": str(e),
+                "catch_reason": "Catching pg8000 DB exception; rolling back and re-raising to caller"
+            }
         )
         raise e
     finally:
@@ -62,7 +68,13 @@ def update(tenant_id: str, prospect_id: int, new_data: dict) -> None:
             conn.rollback()
         logger.error(
             "Failed to update memory",
-            extra={"tenant_id": tenant_id, "prospect_id": prospect_id, "error": str(e)}
+            extra={
+                "tenant_id": tenant_id, 
+                "prospect_id": prospect_id, 
+                "exc_type": type(e).__name__, 
+                "error": str(e),
+                "catch_reason": "Catching pg8000 DB exception; rolling back and re-raising to caller"
+            }
         )
         raise e
     finally:

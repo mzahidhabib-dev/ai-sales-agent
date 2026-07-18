@@ -67,6 +67,14 @@ class PlatformSDK:
         self.events = events
         self.security = security
         self.api = api
+        
+    def get_logger(self, name: str):
+        """
+        Returns the configured platform logger.
+        Business agents must use this instead of importing logging modules directly.
+        """
+        from platform_core.logging_config import get_logger
+        return get_logger(name)
 
 
 # Singleton instance for agents to import
