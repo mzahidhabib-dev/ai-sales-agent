@@ -72,7 +72,8 @@ CREATE TABLE decision_cards (
     approved BOOLEAN,
     approval_required BOOLEAN,
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    replay_id VARCHAR(255)
+    replay_id VARCHAR(255),
+    approval_status VARCHAR(50) DEFAULT 'NOT_REQUIRED'
 );
 
 CREATE TABLE events (

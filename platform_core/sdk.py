@@ -55,7 +55,11 @@ class SDK:
         self.ai = ai_gateway
         self.knowledge = knowledge
         self.tools = tool_gateway
+        
+        # We manually attach the new approval methods to the decisions namespace
+        # so agents can call sdk.decisions.request_approval(id)
         self.decisions = decision_cards
+        
         self.events = events
         self.security = security
 

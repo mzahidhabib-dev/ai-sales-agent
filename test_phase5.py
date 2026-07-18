@@ -105,5 +105,19 @@ def run_tests():
     except SecurityViolation as e:
         logger.info(f"SUCCESS: Caught expected SecurityViolation: {e}")
 
+    logger.info("--- Test 6: Secrets Manager Verification ---")
+    try:
+        import os
+        
+        # We will temporarily remove a variable and then ask the secrets manager for it
+        os.environ.pop("TEST_MISSING_SECRET", None)
+        
+        logger.info("Attempting to load a missing secret 'TEST_MISSING_SECRET'...")
+        sdk.security.get_secret("TEST_MISSING_SECRET")
+        
+        logger.error("FAIL: Secrets manager failed to catch the missing secret!")
+    except ValueError as e:
+        logger.info(f"SUCCESS: Caught expected ValueError: {e}")
+        
 if __name__ == "__main__":
     run_tests()

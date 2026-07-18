@@ -97,3 +97,76 @@ def record_decision(
     finally:
         if conn:
             conn.close()
+
+def request_approval(decision_id: int) -> None:
+    """
+    Updates the decision card's approval_status to 'PENDING_APPROVAL'.
+    Used by the HITL Gateway when a high-risk action requires human review.
+    """
+    logger.info("Requesting human approval", extra={"decision_id": decision_id})
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE decision_cards SET approval_status = 'PENDING_APPROVAL' WHERE decision_id = %s",
+            (decision_id,)
+        )
+        conn.commit()
+    except Exception as e:
+        logger.error(
+            "Failed to request approval",
+            extra={"decision_id": decision_id, "exc_type": type(e).__name__, "error": str(e)}
+        )
+        if conn:
+            conn.rollback()
+        raise e
+    finally:
+        if conn:
+            conn.close()
+
+def resolve_approval(decision_id: int, status: str, new_result: str = None) -> None:
+    """
+    Resolves a pending human approval.
+    
+    Args:
+        decision_id: The ID of the decision card.
+        status: One of 'APPROVED', 'REJECTED', 'EDITED'.
+        new_result: If 'EDITED', the human-provided new result string.
+    """
+    valid_statuses = {"APPROVED", "REJECTED", "EDITED"}
+    if status not in valid_statuses:
+        raise ValueError(f"Invalid approval status. Must be one of {valid_statuses}")
+        
+    logger.info(
+        "Resolving human approval", 
+        extra={"decision_id": decision_id, "new_status": status, "is_edited": bool(new_result)}
+    )
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        if status == "EDITED" and new_result is not None:
+            cursor.execute(
+                "UPDATE decision_cards SET approval_status = %s, result = %s WHERE decision_id = %s",
+                (status, new_result, decision_id)
+            )
+        else:
+            cursor.execute(
+                "UPDATE decision_cards SET approval_status = %s WHERE decision_id = %s",
+                (status, decision_id)
+            )
+            
+        conn.commit()
+    except Exception as e:
+        logger.error(
+            "Failed to resolve approval",
+            extra={"decision_id": decision_id, "exc_type": type(e).__name__, "error": str(e)}
+        )
+        if conn:
+            conn.rollback()
+        raise e
+    finally:
+        if conn:
+            conn.close()
