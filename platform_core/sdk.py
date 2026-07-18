@@ -43,6 +43,7 @@ from platform_core import decision_cards
 from platform_core import events
 from platform_core import security
 from platform_core.api_stub import api
+from platform_core import memory
 
 
 class PlatformSDK:
@@ -57,6 +58,7 @@ class PlatformSDK:
         self.ai = ai_gateway
         self.knowledge = knowledge
         self.tools = tool_gateway
+        self.memory = memory
         
         # We manually attach the new approval methods to the decisions namespace
         # so agents can call sdk.decisions.request_approval(id)

@@ -203,8 +203,16 @@ def ResearchAgent(state: dict) -> dict:
         )
         _publish_failure(tenant_id, agent, f"research_company failed: {e}")
         raise
+        
+    prospect_id = state["prospects"][idx].get("prospect_id")
+    try:
+        mem = sdk.memory.get(tenant_id, prospect_id)
+        memory_context = f"\nPast interaction memory: {mem}" if mem else ""
+    except Exception as e:
+        logger.warning(f"ResearchAgent: failed to read memory: {e}")
+        memory_context = ""
 
-    prompt = f"Summarize this research concisely: {raw_research}"
+    prompt = f"Summarize this research concisely: {raw_research}{memory_context}"
     ai_res = sdk.ai.generate(prompt)
 
     # Rule 9/12: Must check valid before using output
@@ -435,26 +443,35 @@ def FollowUpAgent(state: dict) -> dict:
     Error cases:
         - record_decision fails: workflow.failed published; exception re-raised.
     """
-    _require(state, "tenant_id")
+    _require(state, "tenant_id", "prospects")
     tenant_id = state["tenant_id"]
     agent = "FollowUpAgent"
+    idx = state.get("current_prospect_index", 0)
+    prospect_id = state["prospects"][idx].get("prospect_id")
 
     try:
+        mem = sdk.memory.get(tenant_id, prospect_id)
+        follow_up_count = mem.get("follow_up_count", 0)
+        
+        # We record that we are doing a follow up
+        new_count = follow_up_count + 1
+        sdk.memory.update(tenant_id, prospect_id, {"follow_up_count": new_count, "last_follow_up": "today"})
+        
         sdk.decisions.record_decision(
             tenant_id=tenant_id,
             agent_name=agent,
             action="trigger_follow_up",
-            result="Follow up triggered (stub: Phase 6 cadence not yet active)",
+            result=f"Follow up triggered. This is follow up #{new_count}.",
         )
     except Exception as e:
         logger.error(
-            "FollowUpAgent: record_decision failed",
+            "FollowUpAgent: record_decision or memory update failed",
             extra={"tenant_id": tenant_id, "exc_type": type(e).__name__, "error": str(e)},
         )
-        _publish_failure(tenant_id, agent, f"record_decision failed: {e}")
+        _publish_failure(tenant_id, agent, f"follow up failed: {e}")
         raise
 
-    sdk.events.publish(tenant_id, "followup.triggered", {})
+    sdk.events.publish(tenant_id, "followup.triggered", {"follow_up_count": new_count})
     return {"follow_up_triggered": True}
 
 
