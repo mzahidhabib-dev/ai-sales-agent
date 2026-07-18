@@ -28,8 +28,10 @@ def record_decision(
     Inserts a row into decision_cards and writes the corresponding full audit trail to audit_logs.
     Returns the generated decision_id.
     """
-    conn = get_connection()
+    logger.info("Recording decision", extra={"tenant_id": tenant_id, "agent_name": agent_name, "action": action})
+    conn = None
     try:
+        conn = get_connection()
         cursor = conn.cursor()
         
         # Insert into decision_cards
@@ -82,7 +84,9 @@ def record_decision(
                 "catch_reason": "Catching pg8000 DB exception; rolling back and re-raising to caller"
             }
         )
-        conn.rollback()
+        if conn:
+            conn.rollback()
         raise e
     finally:
-        conn.close()
+        if conn:
+            conn.close()

@@ -39,8 +39,9 @@ def update_crm(tenant_id: str, prospect_id: int, stage_id: str, value: float = 0
     Returns the opportunity_id.
     """
     logger.info("Updating CRM", extra={"tenant_id": tenant_id, "prospect_id": prospect_id, "stage_id": stage_id})
-    conn = get_connection()
+    conn = None
     try:
+        conn = get_connection()
         cursor = conn.cursor()
         
         # Check if opportunity exists
@@ -77,16 +78,19 @@ def update_crm(tenant_id: str, prospect_id: int, stage_id: str, value: float = 0
                 "catch_reason": "Catching pg8000 DB exception; rolling back and re-raising to caller"
             }
         )
-        conn.rollback()
+        if conn:
+            conn.rollback()
         raise e
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 def record_handoff(tenant_id: str, prospect_id: int, opportunity_id: int, summary: str) -> int:
     """Writes a handoff record to the Postgres `handoffs` table."""
     logger.info("Recording human handoff", extra={"tenant_id": tenant_id, "prospect_id": prospect_id})
-    conn = get_connection()
+    conn = None
     try:
+        conn = get_connection()
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO handoffs (tenant_id, prospect_id, opportunity_id, summary) VALUES (%s, %s, %s, %s) RETURNING handoff_id",
@@ -106,10 +110,12 @@ def record_handoff(tenant_id: str, prospect_id: int, opportunity_id: int, summar
                 "catch_reason": "Catching pg8000 DB exception; rolling back and re-raising to caller"
             }
         )
-        conn.rollback()
+        if conn:
+            conn.rollback()
         raise e
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 def call(tool_name: str, **kwargs):
     """Dynamically dispatches to the tool by name."""

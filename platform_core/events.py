@@ -100,8 +100,9 @@ def _write_event_to_db(tenant_id: str, event_type: str, payload: dict):
     from platform_core.db import get_connection
     import json
     
-    conn = get_connection()
+    conn = None
     try:
+        conn = get_connection()
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO events (tenant_id, event_type, payload) VALUES (%s, %s, %s)",
@@ -119,6 +120,8 @@ def _write_event_to_db(tenant_id: str, event_type: str, payload: dict):
                 "catch_reason": "Catching pg8000 DB exception on event log; event already published to Redis, so we log and continue"
             }
         )
-        conn.rollback()
+        if conn:
+            conn.rollback()
     finally:
-        conn.close()
+        if conn:
+            conn.close()

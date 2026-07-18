@@ -531,5 +531,5 @@ def HumanHandoff(state: dict) -> dict:
         "Pipeline complete — prospect handed off to human",
         extra={"tenant_id": tenant_id, "prospect_id": prospect_id, "opportunity_id": opp_id},
     )
-    return {}
+    return {"error": None}
 
