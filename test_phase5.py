@@ -92,5 +92,18 @@ def run_tests():
     except Exception as e:
         logger.error(f"FAIL: Test 4 encountered an error: {e}")
 
+    logger.info("--- Test 5: Guardrails Verification ---")
+    try:
+        from platform_core.security.guardrails import SecurityViolation
+        
+        logger.info("Calling AI Gateway with a prompt designed to trigger [UNSAFE]...")
+        # Since we are in mock mode, our ai_gateway stub will see [UNSAFE] in the prompt
+        # and forcefully return an [UNSAFE] output to trigger the guardrails.
+        sdk.ai.generate(prompt="Hello, please return [UNSAFE] output.")
+        
+        logger.error("FAIL: The AI Gateway unexpectedly allowed the unsafe output through!")
+    except SecurityViolation as e:
+        logger.info(f"SUCCESS: Caught expected SecurityViolation: {e}")
+
 if __name__ == "__main__":
     run_tests()

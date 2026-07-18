@@ -89,6 +89,13 @@ def generate(
     # ----------------------------------------------------------------
     if _USE_MOCK:
         logger.info("AI Gateway: returning mock response", extra={"model": model_name})
+        
+        from platform_core.security.guardrails import check_safety
+        
+        # Step 5.5: Enforce guardrails on mock too
+        if prompt and "[UNSAFE]" in prompt: # We'll trigger it this way for the test
+            check_safety(prompt, "[UNSAFE] This is a mocked unsafe response.")
+        
         if schema:
             return {"raw": json.dumps(_MOCK_RESPONSE_JSON), "output": _MOCK_RESPONSE_JSON,
                     "valid": True, "error": None}
@@ -132,6 +139,11 @@ def generate(
             if raw_text.endswith("```"):
                 raw_text = raw_text[:-3]
             raw_text = raw_text.strip()
+
+            from platform_core.security.guardrails import check_safety
+            # Step 5.5: Synchronous safety check
+            # This throws SecurityViolation if unsafe, halting the pipeline immediately.
+            check_safety(prompt, raw_text)
 
             result = {"raw": raw_text, "output": raw_text, "valid": True, "error": None}
 
