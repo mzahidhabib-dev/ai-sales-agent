@@ -14,25 +14,17 @@ Optional:
 """
 
 import pg8000.dbapi
-import os
 from platform_core.logging_config import get_logger
+from platform_core.security.secrets import get_secret
 
 logger = get_logger(__name__)
 
-# --- Fail-fast at module load: raise immediately if any required var is missing ---
-_REQUIRED_ENV_VARS = ["POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_HOST", "POSTGRES_DB"]
-_missing = [v for v in _REQUIRED_ENV_VARS if not os.getenv(v)]
-if _missing:
-    raise EnvironmentError(
-        f"Missing required environment variables for DB connection: {_missing}. "
-        "Set them before starting the application."
-    )
-
-DB_USER = os.environ["POSTGRES_USER"]
-DB_PASSWORD = os.environ["POSTGRES_PASSWORD"]  # never logged
-DB_HOST = os.environ["POSTGRES_HOST"]
-DB_PORT = int(os.getenv("POSTGRES_PORT", "5432"))
-DB_NAME = os.environ["POSTGRES_DB"]
+# --- Load secrets via Centralized Secrets Manager ---
+DB_USER = get_secret("POSTGRES_USER")
+DB_PASSWORD = get_secret("POSTGRES_PASSWORD")  # never logged
+DB_HOST = get_secret("POSTGRES_HOST")
+DB_PORT = int(get_secret("POSTGRES_PORT", "5432"))
+DB_NAME = get_secret("POSTGRES_DB")
 
 
 def get_connection() -> pg8000.dbapi.Connection:

@@ -41,6 +41,7 @@ from platform_core import knowledge
 from platform_core import tool_gateway
 from platform_core import decision_cards
 from platform_core import events
+from platform_core import security
 
 
 class SDK:
@@ -56,8 +57,8 @@ class SDK:
         self.tools = tool_gateway
         self.decisions = decision_cards
         self.events = events
+        self.security = security
 
 
 # Singleton instance for agents to import
 sdk = SDK()
-

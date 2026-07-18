@@ -18,17 +18,17 @@ Environment variables:
 """
 
 import google.generativeai as genai
-import os
 import json
 import time
 from platform_core.logging_config import get_logger
+from platform_core.security.secrets import get_secret
 
 logger = get_logger(__name__)
 
 # -------------------------------------------------------------------
 # Mock mode (Rule 16)
 # -------------------------------------------------------------------
-_USE_MOCK = os.getenv("USE_MOCK_AI", "true").lower() == "true"
+_USE_MOCK = get_secret("USE_MOCK_AI", "true").lower() == "true"
 
 _MOCK_RESPONSE_TEXT = "This is a mock AI response for development and testing."
 _MOCK_RESPONSE_JSON = {
@@ -43,11 +43,7 @@ _MOCK_RESPONSE_JSON = {
 # Real Gemini setup (only used when USE_MOCK_AI=false)
 # -------------------------------------------------------------------
 if not _USE_MOCK:
-    _api_key = os.getenv("GEMINI_API_KEY")
-    if not _api_key:
-        raise EnvironmentError(
-            "GEMINI_API_KEY environment variable is required when USE_MOCK_AI=false."
-        )
+    _api_key = get_secret("GEMINI_API_KEY")
     genai.configure(api_key=_api_key)
 
 # Simple in-process rate limiter (memory only; not shared across worker processes)

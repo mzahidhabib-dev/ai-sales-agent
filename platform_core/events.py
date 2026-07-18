@@ -13,13 +13,13 @@ Rules compliance:
 
 import json
 import redis
-import os
 from platform_core.logging_config import get_logger
+from platform_core.security.secrets import get_secret
 
 logger = get_logger(__name__)
 
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+REDIS_HOST = get_secret("REDIS_HOST", "localhost")
+REDIS_PORT = int(get_secret("REDIS_PORT", "6379"))
 
 # Pub/Sub Redis Client
 r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
