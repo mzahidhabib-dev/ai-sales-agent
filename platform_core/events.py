@@ -40,7 +40,9 @@ VALID_EVENTS = {
     "approval.rejected",
     "workflow.failed"
 }
+from platform_core.security.tenant_isolation import enforce_tenant
 
+@enforce_tenant
 def publish(tenant_id: str, event_type: str, payload: dict) -> None:
     """
     Publish an event to Redis Pub/Sub and write to the Postgres events table.

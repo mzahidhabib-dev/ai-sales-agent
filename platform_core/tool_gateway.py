@@ -32,7 +32,9 @@ def check_calendar_availability(tenant_id: str) -> list:
     return ["2026-07-20T10:00:00Z", "2026-07-21T14:00:00Z"]
 
 # --- IMPLEMENTED TOOLS ---
+from platform_core.security.tenant_isolation import enforce_tenant
 
+@enforce_tenant
 def update_crm(tenant_id: str, prospect_id: int, stage_id: str, value: float = 0.0) -> int:
     """
     Writes directly to Postgres `opportunities` / `pipeline_stage` tables.

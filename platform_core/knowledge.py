@@ -19,7 +19,9 @@ logger = get_logger(__name__)
 
 KNOWLEDGE_DIR = os.path.join(os.path.dirname(__file__), "knowledge_data")
 
+from platform_core.security.tenant_isolation import enforce_tenant
 
+@enforce_tenant
 def get(key: str, tenant_id: str) -> dict:
     """
     Loads a configuration value from flat JSON files.
@@ -63,4 +65,27 @@ def get(key: str, tenant_id: str) -> dict:
             f"key={key!r}, tenant_id={tenant_id!r}, file={file_to_load!r}. "
             f"JSON error: {e}"
         ) from e
+
+
+from platform_core.security.rbac import require_role
+
+@require_role("admin")
+def update(key: str, tenant_id: str, new_config: dict) -> None:
+    """
+    Updates the configuration for a given tenant.
+    
+    This is currently a stub for the Step 5.2 negative test to prove
+    that a 'viewer' role is blocked from calling this function.
+    
+    Args:
+        key:       Config key name.
+        tenant_id: Tenant identifier.
+        new_config: The new dictionary to save.
+    """
+    logger.info(
+        "Knowledge config updated",
+        extra={"tenant_id": tenant_id, "key": key}
+    )
+    # The actual file writing logic is not built yet, as this is just
+    # a stub to demonstrate RBAC enforcement on the service layer.
 

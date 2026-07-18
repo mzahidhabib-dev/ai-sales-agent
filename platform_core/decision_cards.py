@@ -52,6 +52,13 @@ def record_decision(
         )
         decision_id = cursor.fetchone()[0]
 
+        from platform_core.security.pii_masking import mask_pii
+
+        # Mask PII before storing in the audit log view (Step 5.4)
+        masked_prompt = mask_pii(prompt) if prompt else None
+        masked_raw_output = mask_pii(raw_output) if raw_output else None
+        masked_validation_result = mask_pii(json.dumps(validation_result)) if validation_result else None
+
         # Insert into audit_logs (Step 2.7)
         cursor.execute(
             """
@@ -61,8 +68,8 @@ def record_decision(
             ) VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
             (
-                decision_id, tenant_id, agent_name, prompt, model,
-                raw_output, json.dumps(validation_result) if validation_result else None
+                decision_id, tenant_id, agent_name, masked_prompt, model,
+                masked_raw_output, masked_validation_result
             )
         )
 
