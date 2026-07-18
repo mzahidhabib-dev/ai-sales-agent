@@ -20,8 +20,11 @@ class PipelineState(TypedDict):
     score: Optional[float]
     buying_signal: Optional[bool]
     
-    # Set by PersonalizationAgent
+    # Set by DraftOutreachAgent
     outreach_message: Optional[str]
+    outreach_decision_id: Optional[int]
+    
+    # Set by SendOutreachAgent
     email_sent: Optional[bool]
     
     # Set by FollowUpAgent

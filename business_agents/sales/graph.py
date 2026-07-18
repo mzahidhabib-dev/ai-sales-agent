@@ -7,7 +7,8 @@ from business_agents.sales.nodes import (
     DecisionMakerAgent,
     ResearchAgent,
     ScoringAgent,
-    PersonalizationAgent,
+    DraftOutreachAgent,
+    SendOutreachAgent,
     FollowUpAgent,
     MeetingAgent,
     HumanHandoff
@@ -22,7 +23,8 @@ def create_sales_graph():
     builder.add_node("DecisionMakerAgent", DecisionMakerAgent)
     builder.add_node("ResearchAgent", ResearchAgent)
     builder.add_node("ScoringAgent", ScoringAgent)
-    builder.add_node("PersonalizationAgent", PersonalizationAgent)
+    builder.add_node("DraftOutreachAgent", DraftOutreachAgent)
+    builder.add_node("SendOutreachAgent", SendOutreachAgent)
     builder.add_node("FollowUpAgent", FollowUpAgent)
     builder.add_node("MeetingAgent", MeetingAgent)
     builder.add_node("HumanHandoff", HumanHandoff)
@@ -30,24 +32,20 @@ def create_sales_graph():
     # 3. Add Edges (Linear pipeline for MVP)
     builder.add_edge(START, "ProspectAgent")
     
-    # Simple conditional routing logic (or linear for now)
-    # We will do a simple linear flow based on Step 3.1
-    # ProspectAgent -> DecisionMakerAgent -> ResearchAgent -> ScoringAgent 
-    # -> PersonalizationAgent -> FollowUpAgent -> MeetingAgent -> HumanHandoff
     builder.add_edge("ProspectAgent", "DecisionMakerAgent")
     builder.add_edge("DecisionMakerAgent", "ResearchAgent")
     builder.add_edge("ResearchAgent", "ScoringAgent")
     
-    # For now, unconditionally move forward. In Phase 6 (Intelligent routing), we will add conditional edges based on score.
-    builder.add_edge("ScoringAgent", "PersonalizationAgent")
-    builder.add_edge("PersonalizationAgent", "FollowUpAgent")
+    builder.add_edge("ScoringAgent", "DraftOutreachAgent")
+    builder.add_edge("DraftOutreachAgent", "SendOutreachAgent")
+    builder.add_edge("SendOutreachAgent", "FollowUpAgent")
     builder.add_edge("FollowUpAgent", "MeetingAgent")
     builder.add_edge("MeetingAgent", "HumanHandoff")
     builder.add_edge("HumanHandoff", END)
     
-    # 4. Compile with Checkpointer
+    # 4. Compile with Checkpointer and HITL interrupt (Step 6.2)
     memory = MemorySaver()
-    graph = builder.compile(checkpointer=memory)
+    graph = builder.compile(checkpointer=memory, interrupt_before=["SendOutreachAgent"])
     return graph
 
 # Expose a default instance

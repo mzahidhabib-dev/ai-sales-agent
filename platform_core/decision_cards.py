@@ -170,3 +170,34 @@ def resolve_approval(decision_id: int, status: str, new_result: str = None) -> N
     finally:
         if conn:
             conn.close()
+
+def get_decision(decision_id: int) -> dict:
+    """
+    Fetches a decision card from the database.
+    """
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT decision_id, tenant_id, agent_name, action, result, approval_status FROM decision_cards WHERE decision_id = %s",
+            (decision_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise ValueError(f"Decision card {decision_id} not found")
+            
+        return {
+            "decision_id": row[0],
+            "tenant_id": row[1],
+            "agent_name": row[2],
+            "action": row[3],
+            "result": row[4],
+            "approval_status": row[5]
+        }
+    except Exception as e:
+        logger.error("Failed to fetch decision card", extra={"decision_id": decision_id, "error": str(e)})
+        raise e
+    finally:
+        if conn:
+            conn.close()

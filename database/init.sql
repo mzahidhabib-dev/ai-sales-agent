@@ -107,3 +107,13 @@ CREATE TABLE audit_logs (
     validation_result JSONB,
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE memory (
+    memory_id SERIAL PRIMARY KEY,
+    tenant_id VARCHAR(50) REFERENCES tenants(tenant_id),
+    prospect_id INT REFERENCES prospects(prospect_id),
+    data JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_memory_tenant_prospect UNIQUE (tenant_id, prospect_id)
+);

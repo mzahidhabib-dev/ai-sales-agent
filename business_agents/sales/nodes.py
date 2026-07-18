@@ -313,62 +313,94 @@ def ScoringAgent(state: dict) -> dict:
     return {"score": score, "buying_signal": buying_signal}
 
 
-def PersonalizationAgent(state: dict) -> dict:
+def DraftOutreachAgent(state: dict) -> dict:
     """
-    Generates a personalized outreach email and sends it.
-
+    Generates a personalized outreach email, records it, and requests approval.
+    (Pauses here for Human-in-the-Loop)
+    
     Required state keys: tenant_id, decision_maker, research_summary
-    Sets state keys:     outreach_message, email_sent
-
-    Error cases:
-        - AI Gateway returns valid=False: workflow.failed published; exception raised.
-        - send_email tool fails: workflow.failed published; exception re-raised.
-        - record_decision fails: workflow.failed published; exception re-raised.
+    Sets state keys:     outreach_message, outreach_decision_id
     """
     _require(state, "tenant_id", "decision_maker", "research_summary")
     tenant_id = state["tenant_id"]
-    agent = "PersonalizationAgent"
+    agent = "DraftOutreachAgent"
     dm = state["decision_maker"]
     summary = state["research_summary"]
 
     prompt = f"Write a cold email to {dm.get('first_name')}. Context: {summary}"
     ai_res = sdk.ai.generate(prompt)
 
-    # Rule 9/12: Check valid before using output
     if not ai_res.get("valid"):
         err = f"Email generation AI output invalid: {ai_res.get('error')}"
-        logger.error("PersonalizationAgent: AI Gateway returned invalid response",
+        logger.error(f"{agent}: AI Gateway returned invalid response",
                      extra={"tenant_id": tenant_id, "ai_error": ai_res.get("error")})
         _publish_failure(tenant_id, agent, err)
-        raise RuntimeError(f"PersonalizationAgent: {err}")
+        raise RuntimeError(f"{agent}: {err}")
 
     message = ai_res["output"]
 
     try:
-        sdk.decisions.record_decision(
+        decision_id = sdk.decisions.record_decision(
             tenant_id=tenant_id,
             agent_name=agent,
-            action="generate_outreach",
+            action="draft_outreach",
             prompt=prompt,
             raw_output=ai_res.get("raw"),
-            result="Generated email",
+            result=str(message),
         )
+        sdk.decisions.request_approval(decision_id)
     except Exception as e:
         logger.error(
-            "PersonalizationAgent: record_decision failed",
+            f"{agent}: record_decision or request_approval failed",
             extra={"tenant_id": tenant_id, "exc_type": type(e).__name__, "error": str(e)},
         )
-        _publish_failure(tenant_id, agent, f"record_decision failed: {e}")
+        _publish_failure(tenant_id, agent, f"approval request failed: {e}")
         raise
 
-    sdk.events.publish(tenant_id, "outreach.generated", {"message_preview": str(message)[:100]})
+    sdk.events.publish(tenant_id, "outreach.drafted", {"message_preview": str(message)[:100], "decision_id": decision_id})
+    return {"outreach_message": str(message), "outreach_decision_id": decision_id}
 
-    # Rule 15: never log email body — only log to_email
+
+def SendOutreachAgent(state: dict) -> dict:
+    """
+    Wakes up after Human-in-the-Loop interaction.
+    Reads the decision status. Sends the email (original or edited), or aborts if rejected.
+    
+    Required state keys: tenant_id, decision_maker, outreach_decision_id
+    Sets state keys:     email_sent
+    """
+    _require(state, "tenant_id", "decision_maker", "outreach_decision_id")
+    tenant_id = state["tenant_id"]
+    agent = "SendOutreachAgent"
+    dm = state["decision_maker"]
+    decision_id = state["outreach_decision_id"]
+
+    try:
+        decision = sdk.decisions.get_decision(decision_id)
+    except Exception as e:
+        _publish_failure(tenant_id, agent, f"Failed to load decision: {e}")
+        raise
+
+    status = decision.get("approval_status")
+    
+    if status == "PENDING_APPROVAL":
+        err = "Agent woke up but approval is still pending!"
+        _publish_failure(tenant_id, agent, err)
+        raise RuntimeError(f"{agent}: {err}")
+        
+    if status == "REJECTED":
+        logger.info("Human rejected the email draft. Aborting send.", extra={"decision_id": decision_id})
+        sdk.events.publish(tenant_id, "email.rejected", {"decision_id": decision_id})
+        return {"email_sent": False}
+        
+    # If edited, use the human's result, otherwise use the original state message
+    final_message = decision["result"] if status == "EDITED" else state.get("outreach_message", "")
+
     email = dm.get("email", "")
     if not email:
         err = "Decision maker has no email address"
         _publish_failure(tenant_id, agent, err)
-        raise ValueError(f"PersonalizationAgent: {err}")
+        raise ValueError(f"{agent}: {err}")
 
     try:
         sdk.tools.call(
@@ -376,19 +408,18 @@ def PersonalizationAgent(state: dict) -> dict:
             tenant_id=tenant_id,
             to_email=email,
             subject="Hello",
-            body=str(message),
+            body=final_message,
         )
     except Exception as e:
         logger.error(
-            "PersonalizationAgent: send_email tool failed",
-            extra={"tenant_id": tenant_id, "to_email": email,
-                   "exc_type": type(e).__name__, "error": str(e)},
+            f"{agent}: send_email tool failed",
+            extra={"tenant_id": tenant_id, "to_email": email, "exc_type": type(e).__name__, "error": str(e)},
         )
         _publish_failure(tenant_id, agent, f"send_email failed: {e}")
         raise
 
     sdk.events.publish(tenant_id, "email.sent", {"to_email": email})
-    return {"outreach_message": str(message), "email_sent": True}
+    return {"email_sent": True}
 
 
 def FollowUpAgent(state: dict) -> dict:

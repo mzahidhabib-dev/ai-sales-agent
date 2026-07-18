@@ -42,13 +42,15 @@ from platform_core import tool_gateway
 from platform_core import decision_cards
 from platform_core import events
 from platform_core import security
+from platform_core.api_stub import api
 
 
-class SDK:
+class PlatformSDK:
     """
-    Platform SDK entrypoint for Business Agents.
-    The ONLY module Business Agent Layer may import.
-    See module docstring above for the full interface contract.
+    The official SDK for Business Agents.
+    Usage:
+        from platform_core.sdk import sdk
+        sdk.tools.call("find_prospect", tenant_id="tenant_1")
     """
 
     def __init__(self):
@@ -62,7 +64,8 @@ class SDK:
         
         self.events = events
         self.security = security
+        self.api = api
 
 
 # Singleton instance for agents to import
-sdk = SDK()
+sdk = PlatformSDK()
