@@ -1,36 +1,22 @@
 """
 platform_core/ai_gateway.py
 
-Wraps the Gemini API behind a single generate() function.
-
-Rules compliance:
-  Rule 9  -- Exception handling: catches google.generativeai SDK exceptions and
-             JSONDecodeError explicitly; logs exc_type + catch_reason; re-raises
-             or returns error dict on final retry so callers always get a usable
-             response shape.
-  Rule 16 -- USE_MOCK_AI=true (default in dev) returns a deterministic mock
-             response without making any real Gemini calls, preserving rate-limit
-             budget. Set USE_MOCK_AI=false only for real verification runs.
-
-Environment variables:
-  GEMINI_API_KEY  -- required when USE_MOCK_AI=false
-  USE_MOCK_AI     -- "true" | "false"  (default: "true")
+Wraps multiple AI APIs behind a single generate() function.
+Supports Gemini (primary), OpenAI, and Anthropic.
+Implements Step 12.2 fallback logic.
 """
 
-import google.generativeai as genai
 import json
 import time
 from platform_core.logging_config import get_logger
 from platform_core.security.secrets import get_secret
 from platform_core.observability.metrics import AI_GATEWAY_CALLS
+from platform_core.security.guardrails import check_safety
 
 logger = get_logger(__name__)
 
-# -------------------------------------------------------------------
 # Mock mode (Rule 16)
-# -------------------------------------------------------------------
 _USE_MOCK = get_secret("USE_MOCK_AI", "true").lower() == "true"
-
 _MOCK_RESPONSE_TEXT = "This is a mock AI response for development and testing."
 _MOCK_RESPONSE_JSON = {
     "score": 75.0,
@@ -40,84 +26,33 @@ _MOCK_RESPONSE_JSON = {
     "summary": "Mock research summary: The company is a strong ICP fit.",
 }
 
-# -------------------------------------------------------------------
-# Real Gemini setup (only used when USE_MOCK_AI=false)
-# -------------------------------------------------------------------
-if not _USE_MOCK:
+# Simple in-process rate limiter for Gemini
+_last_gemini_call_time = 0.0
+GEMINI_RPM_LIMIT = 15
+SECONDS_BETWEEN_GEMINI_CALLS = 60.0 / GEMINI_RPM_LIMIT
+
+
+def _strip_markdown(text: str) -> str:
+    for prefix in ("```json", "```"):
+        if text.startswith(prefix):
+            text = text[len(prefix):]
+    if text.endswith("```"):
+        text = text[:-3]
+    return text.strip()
+
+
+def _generate_gemini(prompt: str, schema: dict, model_name: str, retries: int) -> dict:
+    import google.generativeai as genai
+    
     _api_key = get_secret("GEMINI_API_KEY")
     genai.configure(api_key=_api_key)
-
-# Simple in-process rate limiter (memory only; not shared across worker processes)
-_last_call_time = 0.0
-RPM_LIMIT = 15  # Gemini free-tier hard limit
-SECONDS_BETWEEN_CALLS = 60.0 / RPM_LIMIT
-
-
-def generate(
-    prompt: str,
-    schema: dict = None,
-    model_name: str = "gemini-1.5-flash",
-    retries: int = 3,
-) -> dict:
-    """
-    Calls Gemini API (or returns a mock) with rate-limiting and optional
-    JSON schema enforcement.
-
-    Args:
-        prompt:     The prompt string to send to the model.
-        schema:     Optional JSON schema dict. If provided, the model is asked
-                    to return a valid JSON object matching it, and the response
-                    is validated.
-        model_name: Gemini model to use.
-        retries:    Number of attempts before giving up.
-
-    Returns:
-        dict with keys:
-            "output" -- parsed JSON (dict) if schema provided and valid, else raw string.
-            "raw"    -- raw text from the model (or mock).
-            "valid"  -- True if output parsed correctly (always True when no schema).
-            "error"  -- error message string, or None on success.
-
-    Error cases:
-        - USE_MOCK_AI=true: always returns a mock response, no exceptions raised.
-        - Network / API error: logged with exc_type; retried with exponential backoff.
-          On final attempt returns {"valid": False, "output": None, "error": <msg>}.
-        - JSONDecodeError on model output: logged as WARNING; "valid" set to False.
-          Caller MUST check "valid" before using "output".
-    """
-    # Step 10.2: Increment Prometheus metric
-    from platform_core.security.tenant_isolation import get_current_tenant
-    AI_GATEWAY_CALLS.labels(model_name=model_name, tenant_id=get_current_tenant() or "unknown").inc()
-
-    # ----------------------------------------------------------------
-    # Mock path (Rule 16)
-    # ----------------------------------------------------------------
-    if _USE_MOCK:
-        logger.info("AI Gateway: returning mock response", extra={"model": model_name})
-        
-        from platform_core.security.guardrails import check_safety
-        
-        # Step 5.5: Enforce guardrails on mock too
-        if prompt and "[UNSAFE]" in prompt: # We'll trigger it this way for the test
-            check_safety(prompt, "[UNSAFE] This is a mocked unsafe response.")
-        
-        if schema:
-            return {"raw": json.dumps(_MOCK_RESPONSE_JSON), "output": _MOCK_RESPONSE_JSON,
-                    "valid": True, "error": None, "cost_usd": 0.005}
-        return {"raw": _MOCK_RESPONSE_TEXT, "output": _MOCK_RESPONSE_TEXT,
-                "valid": True, "error": None, "cost_usd": 0.005}
-
-    # ----------------------------------------------------------------
-    # Real Gemini path
-    # ----------------------------------------------------------------
-    global _last_call_time
-
-    # Rate-limit spacing
+    
+    global _last_gemini_call_time
     now = time.time()
-    elapsed = now - _last_call_time
-    if elapsed < SECONDS_BETWEEN_CALLS:
-        time.sleep(SECONDS_BETWEEN_CALLS - elapsed)
-    _last_call_time = time.time()
+    elapsed = now - _last_gemini_call_time
+    if elapsed < SECONDS_BETWEEN_GEMINI_CALLS:
+        time.sleep(SECONDS_BETWEEN_GEMINI_CALLS - elapsed)
+    _last_gemini_call_time = time.time()
 
     model = genai.GenerativeModel(model_name)
 
@@ -130,63 +65,181 @@ def generate(
 
     for attempt in range(retries):
         try:
-            logger.info(
-                "Calling Gemini API",
-                extra={"model": model_name, "attempt": attempt + 1, "retries": retries},
-            )
+            logger.info("Calling Gemini API", extra={"model": model_name, "attempt": attempt + 1})
             response = model.generate_content(prompt)
-            raw_text = response.text.strip()
+            raw_text = _strip_markdown(response.text.strip())
 
-            # Strip markdown fences if model still wraps the output
-            for prefix in ("```json", "```"):
-                if raw_text.startswith(prefix):
-                    raw_text = raw_text[len(prefix):]
-            if raw_text.endswith("```"):
-                raw_text = raw_text[:-3]
-            raw_text = raw_text.strip()
-
-            from platform_core.security.guardrails import check_safety
-            # Step 5.5: Synchronous safety check
-            # This throws SecurityViolation if unsafe, halting the pipeline immediately.
             check_safety(prompt, raw_text)
 
             result = {"raw": raw_text, "output": raw_text, "valid": True, "error": None, "cost_usd": 0.01}
 
             if schema:
                 try:
-                    parsed_json = json.loads(raw_text)
-                    result["output"] = parsed_json
-                    result["valid"] = True
+                    result["output"] = json.loads(raw_text)
                 except json.JSONDecodeError as e:
-                    # Catching JSONDecodeError: model returned non-JSON despite instructions.
-                    # Logged as WARNING; caller must check valid=False.
-                    logger.warning(
-                        "Failed to parse JSON output from model",
-                        extra={"model": model_name, "attempt": attempt + 1, "error": str(e)},
-                    )
+                    logger.warning("Failed to parse JSON output from Gemini", extra={"error": str(e)})
                     result["valid"] = False
                     result["error"] = f"JSON parsing failed: {e}"
 
             return result
 
         except Exception as e:
-            # Catching broad Exception from google.generativeai SDK (network errors,
-            # quota errors, etc.). Re-raised on final attempt; otherwise retried
-            # with exponential backoff.
             logger.error(
                 "Gemini API call failed",
                 extra={
-                    "model": model_name,
-                    "attempt": attempt + 1,
-                    "exc_type": type(e).__name__,
-                    "error": str(e),
-                    "catch_reason": (
-                        "Catching broad Exception from google.generativeai SDK; "
-                        "re-raised on final attempt, otherwise retried with backoff"
-                    ),
+                    "model": model_name, "attempt": attempt + 1, "exc_type": type(e).__name__, "error": str(e),
+                    "catch_reason": "Catching broad Exception from google.generativeai SDK; re-raised on final attempt."
                 },
             )
             if attempt == retries - 1:
-                return {"raw": "", "output": None, "valid": False, "error": str(e)}
+                raise RuntimeError(f"Gemini failed: {e}")
             time.sleep(2 ** attempt)
 
+
+def _generate_openai(prompt: str, schema: dict, model_name: str, retries: int) -> dict:
+    import openai
+    
+    _api_key = get_secret("OPENAI_API_KEY")
+    client = openai.OpenAI(api_key=_api_key)
+    
+    # We map 'gemini-1.5-flash' equivalent to 'gpt-4o-mini' for OpenAI
+    if "gemini" in model_name:
+        model_name = "gpt-4o-mini"
+        
+    if schema:
+        prompt += (
+            f"\n\nYou MUST return your response as a valid JSON object matching "
+            f"this schema:\n{json.dumps(schema, indent=2)}\n"
+            "Do not include markdown blocks like ```json."
+        )
+
+    for attempt in range(retries):
+        try:
+            logger.info("Calling OpenAI API", extra={"model": model_name, "attempt": attempt + 1})
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            raw_text = _strip_markdown(response.choices[0].message.content.strip())
+            check_safety(prompt, raw_text)
+
+            result = {"raw": raw_text, "output": raw_text, "valid": True, "error": None, "cost_usd": 0.02}
+
+            if schema:
+                try:
+                    result["output"] = json.loads(raw_text)
+                except json.JSONDecodeError as e:
+                    logger.warning("Failed to parse JSON output from OpenAI", extra={"error": str(e)})
+                    result["valid"] = False
+                    result["error"] = f"JSON parsing failed: {e}"
+
+            return result
+
+        except Exception as e:
+            logger.error("OpenAI API call failed", extra={"model": model_name, "attempt": attempt + 1, "exc_type": type(e).__name__, "error": str(e)})
+            if attempt == retries - 1:
+                raise RuntimeError(f"OpenAI failed: {e}")
+            time.sleep(2 ** attempt)
+
+def _generate_anthropic(prompt: str, schema: dict, model_name: str, retries: int) -> dict:
+    import anthropic
+    
+    _api_key = get_secret("ANTHROPIC_API_KEY")
+    client = anthropic.Anthropic(api_key=_api_key)
+    
+    if "gemini" in model_name:
+        model_name = "claude-3-haiku-20240307"
+        
+    if schema:
+        prompt += (
+            f"\n\nYou MUST return your response as a valid JSON object matching "
+            f"this schema:\n{json.dumps(schema, indent=2)}\n"
+            "Do not include markdown blocks like ```json."
+        )
+
+    for attempt in range(retries):
+        try:
+            logger.info("Calling Anthropic API", extra={"model": model_name, "attempt": attempt + 1})
+            response = client.messages.create(
+                model=model_name,
+                max_tokens=1024,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            raw_text = _strip_markdown(response.content[0].text.strip())
+            check_safety(prompt, raw_text)
+
+            result = {"raw": raw_text, "output": raw_text, "valid": True, "error": None, "cost_usd": 0.015}
+
+            if schema:
+                try:
+                    result["output"] = json.loads(raw_text)
+                except json.JSONDecodeError as e:
+                    logger.warning("Failed to parse JSON output from Anthropic", extra={"error": str(e)})
+                    result["valid"] = False
+                    result["error"] = f"JSON parsing failed: {e}"
+
+            return result
+
+        except Exception as e:
+            logger.error("Anthropic API call failed", extra={"model": model_name, "attempt": attempt + 1, "exc_type": type(e).__name__, "error": str(e)})
+            if attempt == retries - 1:
+                raise RuntimeError(f"Anthropic failed: {e}")
+            time.sleep(2 ** attempt)
+
+def generate(
+    prompt: str,
+    schema: dict = None,
+    model_name: str = "gemini-1.5-flash",
+    retries: int = 3,
+    provider: str = "gemini",
+    fallback_provider: str = "openai"
+) -> dict:
+    """
+    Step 12.1 and 12.2: Multi-provider AI Gateway with Fallback.
+    """
+    from platform_core.security.tenant_isolation import get_current_tenant
+    tenant_id = get_current_tenant() or "unknown"
+    AI_GATEWAY_CALLS.labels(model_name=model_name, tenant_id=tenant_id).inc()
+
+    if _USE_MOCK:
+        logger.info("AI Gateway: returning mock response", extra={"model": model_name, "provider": provider})
+        if prompt and "[UNSAFE]" in prompt:
+            check_safety(prompt, "[UNSAFE] This is a mocked unsafe response.")
+        
+        if "FAIL_PRIMARY" in prompt and provider == "gemini":
+            logger.warning("Mock: Simulating primary provider failure, falling back...")
+            provider = fallback_provider
+            
+        if schema:
+            return {"raw": json.dumps(_MOCK_RESPONSE_JSON), "output": _MOCK_RESPONSE_JSON,
+                    "valid": True, "error": None, "cost_usd": 0.005}
+        return {"raw": _MOCK_RESPONSE_TEXT, "output": _MOCK_RESPONSE_TEXT,
+                "valid": True, "error": None, "cost_usd": 0.005}
+
+    providers = {
+        "gemini": _generate_gemini,
+        "openai": _generate_openai,
+        "anthropic": _generate_anthropic
+    }
+
+    primary_func = providers.get(provider)
+    if not primary_func:
+        return {"valid": False, "output": None, "error": f"Unknown provider: {provider}"}
+
+    try:
+        return primary_func(prompt, schema, model_name, retries)
+    except Exception as primary_e:
+        if not fallback_provider or fallback_provider not in providers:
+            logger.error("Primary provider failed and no valid fallback provider is configured", extra={"error": str(primary_e)})
+            return {"raw": "", "output": None, "valid": False, "error": str(primary_e)}
+            
+        logger.warning(
+            "Primary provider failed, initiating FALLBACK to secondary provider",
+            extra={"primary": provider, "fallback": fallback_provider, "error": str(primary_e)}
+        )
+        fallback_func = providers[fallback_provider]
+        try:
+            return fallback_func(prompt, schema, model_name, retries=1) # Don't retry fallback multiple times
+        except Exception as fallback_e:
+            logger.error("Fallback provider also failed!", extra={"error": str(fallback_e)})
+            return {"raw": "", "output": None, "valid": False, "error": f"Primary error: {primary_e}. Fallback error: {fallback_e}"}
