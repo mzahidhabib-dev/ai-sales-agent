@@ -78,6 +78,9 @@ class PlatformSDK:
         from platform_core import observability
         self.observability = observability
         
+        from platform_core import cost
+        self.cost = cost
+        
         self.events = events
         self.security = security
         self.api = api

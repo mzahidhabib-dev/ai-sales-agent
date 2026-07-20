@@ -266,6 +266,7 @@ def ResearchAgent(state: dict) -> dict:
             prompt=prompt,
             raw_output=ai_res.get("raw"),
             result=str(summary)[:500],  # truncate for the DB column
+            cost_usd=ai_res.get("cost_usd"),
         )
     except Exception as e:
         logger.error(
@@ -339,6 +340,7 @@ def ScoringAgent(state: dict) -> dict:
             result=f"Score: {score}",
             confidence=score / 100.0,
             reason=reasons,
+            cost_usd=ai_res.get("cost_usd"),
         )
     except Exception as e:
         logger.error(
@@ -391,7 +393,8 @@ def DraftOutreachAgent(state: dict) -> dict:
             prompt=prompt,
             raw_output=ai_res.get("raw"),
             result=str(message),
-            confidence=0.5  # < 0.8, so it will automatically trigger approval
+            confidence=0.5,  # < 0.8, so it will automatically trigger approval
+            cost_usd=ai_res.get("cost_usd"),
         )
         decision = sdk.decisions.get_decision(decision_id)
         if decision.get("approval_status") == "PENDING_APPROVAL":
