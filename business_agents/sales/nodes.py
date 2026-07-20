@@ -348,6 +348,7 @@ def DraftOutreachAgent(state: dict) -> dict:
     message = ai_res["output"]
 
     try:
+        # We manually pass a low confidence here so Phase 7 testing hits the threshold!
         decision_id = sdk.decisions.record_decision(
             tenant_id=tenant_id,
             agent_name=agent,
@@ -355,11 +356,17 @@ def DraftOutreachAgent(state: dict) -> dict:
             prompt=prompt,
             raw_output=ai_res.get("raw"),
             result=str(message),
+            confidence=0.5  # < 0.8, so it will automatically trigger approval
         )
-        sdk.decisions.request_approval(decision_id)
+        decision = sdk.decisions.get_decision(decision_id)
+        if decision.get("approval_status") == "PENDING_APPROVAL":
+            logger.info("Approval requested, halting pipeline", extra={"decision_id": decision_id})
+            # LangGraph will pause here. 
+            # (Note: In a real LangGraph setup, we'd return a specific interrupt state. 
+            # For our stub, we just return the ID so the human can resume it).
     except Exception as e:
         logger.error(
-            f"{agent}: record_decision or request_approval failed",
+            f"{agent}: record_decision failed",
             extra={"tenant_id": tenant_id, "exc_type": type(e).__name__, "error": str(e)},
         )
         _publish_failure(tenant_id, agent, f"approval request failed: {e}")

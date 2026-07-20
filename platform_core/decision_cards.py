@@ -29,6 +29,12 @@ def record_decision(
     Returns the generated decision_id.
     """
     logger.info("Recording decision", extra={"tenant_id": tenant_id, "agent_name": agent_name, "action": action})
+    
+    # Phase 7.1: Evaluate confidence automatically
+    from platform_core.confidence import evaluate_confidence
+    if confidence is not None and approval_required is not True:
+        approval_required = evaluate_confidence(confidence, action, tenant_id)
+        
     conn = None
     try:
         conn = get_connection()
@@ -74,9 +80,16 @@ def record_decision(
         )
 
         conn.commit()
+        
+        # Phase 7.1 & 7.2: If approval is required, automatically request it.
+        if approval_required:
+            request_approval(decision_id)
+            from platform_core.events import publish
+            publish(tenant_id, "approval.requested", {"decision_id": decision_id, "action": action})
+            
         logger.info(
             "Decision card recorded",
-            extra={"tenant_id": tenant_id, "agent": agent_name, "action": action, "decision_id": decision_id}
+            extra={"tenant_id": tenant_id, "agent": agent_name, "action": action, "decision_id": decision_id, "approval_required": approval_required}
         )
         return decision_id
     except Exception as e:

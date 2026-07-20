@@ -1,5 +1,5 @@
 from platform_core.logging_config import get_logger
-from platform_core.database import get_connection
+from platform_core.db import get_connection
 import json
 
 logger = get_logger(__name__)

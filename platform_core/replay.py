@@ -1,5 +1,5 @@
 from platform_core.logging_config import get_logger
-from platform_core.database import get_connection
+from platform_core.db import get_connection
 
 logger = get_logger(__name__)
 
@@ -49,7 +49,7 @@ def replay_decision(decision_id: int) -> int:
         from platform_core.sdk import sdk
         logger.info("Executing AI Gateway replay generation")
         
-        ai_res = sdk.ai.generate(prompt=original_prompt, tenant_id=tenant_id)
+        ai_res = sdk.ai.generate(prompt=original_prompt)
         
         # 3. Save the new decision card linking back to the original via replay_id
         # We also manually set a high confidence here so the replay itself isn't blocked by the approval engine
