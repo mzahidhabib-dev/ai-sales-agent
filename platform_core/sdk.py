@@ -63,6 +63,14 @@ class PlatformSDK:
         # We manually attach the new approval methods to the decisions namespace
         # so agents can call sdk.decisions.request_approval(id)
         self.decisions = decision_cards
+        from platform_core import confidence
+        self.confidence = confidence
+        
+        from platform_core import audit
+        self.audit = audit
+        
+        from platform_core import replay
+        self.replay = replay
         
         self.events = events
         self.security = security
