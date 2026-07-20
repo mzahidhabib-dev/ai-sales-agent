@@ -103,9 +103,9 @@ def generate(
         
         if schema:
             return {"raw": json.dumps(_MOCK_RESPONSE_JSON), "output": _MOCK_RESPONSE_JSON,
-                    "valid": True, "error": None}
+                    "valid": True, "error": None, "cost_usd": 0.005}
         return {"raw": _MOCK_RESPONSE_TEXT, "output": _MOCK_RESPONSE_TEXT,
-                "valid": True, "error": None}
+                "valid": True, "error": None, "cost_usd": 0.005}
 
     # ----------------------------------------------------------------
     # Real Gemini path
@@ -150,7 +150,7 @@ def generate(
             # This throws SecurityViolation if unsafe, halting the pipeline immediately.
             check_safety(prompt, raw_text)
 
-            result = {"raw": raw_text, "output": raw_text, "valid": True, "error": None}
+            result = {"raw": raw_text, "output": raw_text, "valid": True, "error": None, "cost_usd": 0.01}
 
             if schema:
                 try:

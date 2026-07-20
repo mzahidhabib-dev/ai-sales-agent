@@ -8,16 +8,16 @@ from platform_core.logging_config import get_logger
 log_capture = io.StringIO()
 handler = logging.StreamHandler(log_capture)
 
-# Get the existing JSONFormatter from the root logger (set up by logging_config.py)
-root_logger = logging.getLogger()
-if root_logger.handlers:
-    handler.setFormatter(root_logger.handlers[0].formatter)
+from platform_core.logging_config import _JsonFormatter
+handler.setFormatter(_JsonFormatter())
 
 logger = get_logger("test_phase10_3")
-logger.addHandler(handler)
-# Prevent propagation to root logger to avoid double printing to console during test, 
-# but still use the JSON formatter we copied.
-logger.propagate = False
+logger.setLevel(logging.INFO)
+
+# Attach our capture handler to the root logger so it catches ProspectAgent logs too
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+root_logger.addHandler(handler)
 
 def run_tests():
     tenant_id = "tenant-1"
@@ -45,7 +45,12 @@ def run_tests():
         pass # Ignore errors from missing tools/DB setup, we just want the logs
         
     # Check the logs
-    logs = log_capture.getvalue().strip().split("\n")
+    raw_logs = log_capture.getvalue().strip()
+    print("RAW LOGS CAPTURED:")
+    print(raw_logs)
+    print("------------------")
+    
+    logs = raw_logs.split("\n")
     found_expected = False
     found_state = False
     
