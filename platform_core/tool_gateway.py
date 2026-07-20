@@ -16,8 +16,24 @@ def find_decision_maker(tenant_id: str, prospect_id: int) -> dict:
     return {"first_name": "Alice", "last_name": "Smith", "title": "CTO", "email": "alice@techcorp.com", "decision_maker_id": 1}
 
 def research_company(tenant_id: str, domain: str) -> str:
-    """Stub: Returns fake research data."""
-    logger.info("Researching company", extra={"tenant_id": tenant_id, "domain": domain})
+    """Uses MCP Client to call external server. Falls back to stub if disabled."""
+    logger.info("Researching company via MCP", extra={"tenant_id": tenant_id, "domain": domain})
+    
+    import os
+    from platform_core.mcp_client import call_mcp_tool
+    
+    # Check if we should use the real MCP server or the mock
+    use_mcp = os.environ.get("USE_MCP", "false").lower() == "true"
+    if use_mcp:
+        try:
+            # Command to launch our dummy python MCP server
+            cmd = "python"
+            args = ["scratch/dummy_mcp_server.py"]
+            return call_mcp_tool(cmd, args, "research_company", {"tenant_id": tenant_id, "domain": domain})
+        except Exception as e:
+            logger.error("MCP routing failed", extra={"error": str(e)})
+            raise
+    
     return f"{domain} is a growing B2B SaaS company that recently raised Series A."
 
 def send_email(tenant_id: str, to_email: str, subject: str, body: str) -> bool:
