@@ -479,13 +479,11 @@ def SendOutreachAgent(state: dict) -> dict:
 @time_node("FollowUpAgent")
 def FollowUpAgent(state: dict) -> dict:
     """
-    Triggers a follow-up if no reply has been received.
+    Triggers a follow-up or handles objections if a prospect replies.
 
-    Required state keys: tenant_id
-    Sets state keys:     follow_up_triggered
-
-    Note: Full cadence/memory logic is deferred to Phase 6 (Memory Layer).
-          In Phase Group 1 the follow-up always triggers.
+    Required state keys: tenant_id, prospects, current_prospect_index
+    Optional state keys: prospect_reply
+    Sets state keys:     follow_up_triggered, follow_up_draft
 
     Error cases:
         - record_decision fails: workflow.failed published; exception re-raised.
@@ -495,20 +493,58 @@ def FollowUpAgent(state: dict) -> dict:
     agent = "FollowUpAgent"
     idx = state.get("current_prospect_index", 0)
     prospect_id = state["prospects"][idx].get("prospect_id")
+    reply = state.get("prospect_reply")
+
+    draft = None
+    action = "trigger_follow_up"
+    result = ""
 
     try:
         mem = sdk.memory.get(tenant_id, prospect_id)
         follow_up_count = mem.get("follow_up_count", 0)
-        
-        # We record that we are doing a follow up
         new_count = follow_up_count + 1
+        
+        if reply:
+            # Step 14.1: Pull playbooks from Knowledge Layer
+            playbooks = sdk.knowledge.get("playbooks", tenant_id)
+            objections = playbooks.get("objections", {})
+            
+            # Use AI to classify the objection and draft a response based strictly on the playbook
+            prompt = (
+                f"The prospect replied: '{reply}'.\n"
+                f"Available objection playbooks: {json.dumps(objections)}\n"
+                "Match the reply to an objection category and draft an email following the playbook instructions strictly."
+            )
+            schema = {
+                "type": "object",
+                "properties": {
+                    "objection_category": {"type": "string"},
+                    "email_draft": {"type": "string"}
+                },
+                "required": ["objection_category", "email_draft"]
+            }
+            ai_res = sdk.ai.generate(prompt, schema=schema)
+            
+            if ai_res.get("valid"):
+                draft = ai_res["output"]["email_draft"]
+                action = f"handle_objection_{ai_res['output']['objection_category']}"
+                result = f"Drafted playbook response: {draft[:100]}..."
+            else:
+                result = f"Failed to draft playbook response: {ai_res.get('error')}"
+                logger.warning("FollowUpAgent failed to classify objection", extra={"error": ai_res.get("error")})
+        else:
+            result = f"Standard follow up triggered. This is follow up #{new_count}."
+            
         sdk.memory.update(tenant_id, prospect_id, {"follow_up_count": new_count, "last_follow_up": "today"})
         
         sdk.decisions.record_decision(
             tenant_id=tenant_id,
             agent_name=agent,
-            action="trigger_follow_up",
-            result=f"Follow up triggered. This is follow up #{new_count}.",
+            action=action,
+            result=result,
+            prompt=prompt if reply else None,
+            raw_output=ai_res.get("raw") if reply else None,
+            cost_usd=ai_res.get("cost_usd") if reply else None,
         )
     except Exception as e:
         logger.error(
@@ -518,8 +554,8 @@ def FollowUpAgent(state: dict) -> dict:
         _publish_failure(tenant_id, agent, f"follow up failed: {e}")
         raise
 
-    sdk.events.publish(tenant_id, "followup.triggered", {"follow_up_count": new_count})
-    return {"follow_up_triggered": True}
+    sdk.events.publish(tenant_id, "followup.triggered", {"follow_up_count": new_count, "draft": draft})
+    return {"follow_up_triggered": True, "follow_up_draft": draft}
 
 
 @time_node("MeetingAgent")
