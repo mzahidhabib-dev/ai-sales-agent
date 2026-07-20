@@ -107,6 +107,10 @@ def ProspectAgent(state: dict) -> dict:
     if not tenant_id:
         raise ValueError("ProspectAgent: 'tenant_id' is required in pipeline state.")
 
+    # Phase 10.3: Initialize trace correlation
+    from platform_core.observability.correlation import set_trace_id
+    trace_id = set_trace_id(state.get("trace_id"))
+
     agent = "ProspectAgent"
     try:
         icp = sdk.knowledge.get("icp", tenant_id)

@@ -45,6 +45,12 @@ class _JsonFormatter(logging.Formatter):
             "msg": record.getMessage(),
         }
 
+        # Phase 10.3: Auto-inject trace_id
+        from platform_core.observability.correlation import get_trace_id
+        trace_id = get_trace_id()
+        if trace_id:
+            log_obj["trace_id"] = trace_id
+
         # Attach any extra fields the caller passed via extra={...}
         _reserved = {
             "name", "msg", "args", "levelname", "levelno", "pathname",
