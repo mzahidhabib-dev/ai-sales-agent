@@ -38,7 +38,8 @@ VALID_EVENTS = {
     "approval.requested",
     "approval.granted",
     "approval.rejected",
-    "workflow.failed"
+    "workflow.failed",
+    "decision.recorded"
 }
 from platform_core.security.tenant_isolation import enforce_tenant
 
@@ -127,3 +128,30 @@ def _write_event_to_db(tenant_id: str, event_type: str, payload: dict):
     finally:
         if conn:
             conn.close()
+
+def subscribe(tenant_id: str, callback):
+    """
+    Step 15.1: Subscribe to the event bus and pass events to the callback.
+    This blocks the thread, so it should be run in a background worker.
+    """
+    channel = f"events:{tenant_id}"
+    pubsub = r.pubsub()
+    pubsub.subscribe(channel)
+    
+    logger.info("Subscribed to Event Bus", extra={"channel": channel})
+    
+    for message in pubsub.listen():
+        if message["type"] == "message":
+            try:
+                data = json.loads(message["data"])
+                callback(data)
+            except Exception as e:
+                logger.error(
+                    "Error processing event from bus",
+                    extra={
+                        "channel": channel,
+                        "exc_type": type(e).__name__,
+                        "error": str(e),
+                        "catch_reason": "Catching exception in subscriber loop so it doesn't crash the background worker"
+                    }
+                )

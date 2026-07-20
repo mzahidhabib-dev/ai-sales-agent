@@ -58,28 +58,20 @@ def record_decision(
         )
         decision_id = cursor.fetchone()[0]
 
-        from platform_core.security.pii_masking import mask_pii
-
-        # Mask PII before storing in the audit log view (Step 5.4)
-        masked_prompt = mask_pii(prompt) if prompt else None
-        masked_raw_output = mask_pii(raw_output) if raw_output else None
-        masked_validation_result = mask_pii(json.dumps(validation_result)) if validation_result else None
-
-        # Insert into audit_logs (Step 2.7)
-        cursor.execute(
-            """
-            INSERT INTO audit_logs (
-                decision_id, tenant_id, agent_name, prompt, model, 
-                raw_output, validation_result
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """,
-            (
-                decision_id, tenant_id, agent_name, masked_prompt, model,
-                masked_raw_output, masked_validation_result
-            )
-        )
-
         conn.commit()
+        
+        # Publish the event so the audit subscriber can pick it up
+        from platform_core.events import publish
+        
+        publish_payload = {
+            "decision_id": decision_id,
+            "agent_name": agent_name,
+            "prompt": prompt,
+            "model": model,
+            "raw_output": raw_output,
+            "validation_result": validation_result
+        }
+        publish(tenant_id, "decision.recorded", publish_payload)
         
         # Phase 7.1 & 7.2: If approval is required, automatically request it.
         if approval_required:
