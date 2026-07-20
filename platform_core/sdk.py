@@ -72,6 +72,9 @@ class PlatformSDK:
         from platform_core import replay
         self.replay = replay
         
+        from platform_core import evaluation
+        self.evaluation = evaluation
+        
         self.events = events
         self.security = security
         self.api = api
