@@ -8,17 +8,16 @@ class APIStub:
     Simulates the external HTTP API of the platform.
     In Phase 7, this will be replaced with a real FastAPI server.
     """
-    def webhook_resolve_decision(self, **kwargs) -> dict:
+    def webhook_resolve_decision(self, payload: dict = None, payload_bytes: bytes = b"", signature_header: str = "", **kwargs) -> dict:
         """
         Simulates an HTTP POST route handling a webhook from a UI or Slack.
-        Expected kwargs:
-        - payload: dict with "decision_id", "status", "new_result"
-        - payload_bytes: raw bytes of the request
-        - signature_header: The 'X-Signature' header
         """
-        payload = kwargs.get("payload", {})
-        payload_bytes = kwargs.get("payload_bytes", b"")
-        signature_header = kwargs.get("signature_header", "")
+        if payload is None:
+            payload = kwargs.get("payload", {})
+        if not payload_bytes:
+            payload_bytes = kwargs.get("payload_bytes", b"")
+        if not signature_header:
+            signature_header = kwargs.get("signature_header", "")
         
         # Phase 5.6: Enforce signature verification
         from platform_core.security import verify_webhook_signature, get_secret

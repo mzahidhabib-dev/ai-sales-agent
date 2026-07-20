@@ -131,8 +131,21 @@ def run_tests():
             "status": "REJECTED"
         }
         
+        import json
+        import hmac
+        import hashlib
+        
+        payload_bytes = json.dumps(payload).encode("utf-8")
+        
+        secret = "stub_secret_123"
+        signature = hmac.new(secret.encode('utf-8'), payload_bytes, hashlib.sha256).hexdigest()
+        
         logger.info(f"Simulating webhook payload: {payload}")
-        response = sdk.api.webhook_resolve_decision(payload)
+        response = sdk.api.webhook_resolve_decision(
+            payload=payload, 
+            payload_bytes=payload_bytes, 
+            signature_header=signature
+        )
         
         if response.get("status") == 200:
             logger.info("SUCCESS: Webhook endpoint returned 200 OK")
