@@ -22,6 +22,7 @@ import json
 import time
 from platform_core.logging_config import get_logger
 from platform_core.security.secrets import get_secret
+from platform_core.observability.metrics import AI_GATEWAY_CALLS
 
 logger = get_logger(__name__)
 
@@ -84,6 +85,10 @@ def generate(
         - JSONDecodeError on model output: logged as WARNING; "valid" set to False.
           Caller MUST check "valid" before using "output".
     """
+    # Step 10.2: Increment Prometheus metric
+    from platform_core.security.tenant_isolation import get_current_tenant
+    AI_GATEWAY_CALLS.labels(model_name=model_name, tenant_id=get_current_tenant() or "unknown").inc()
+
     # ----------------------------------------------------------------
     # Mock path (Rule 16)
     # ----------------------------------------------------------------

@@ -75,6 +75,9 @@ class PlatformSDK:
         from platform_core import evaluation
         self.evaluation = evaluation
         
+        from platform_core import observability
+        self.observability = observability
+        
         self.events = events
         self.security = security
         self.api = api

@@ -58,11 +58,38 @@ def _publish_failure(tenant_id: str, agent: str, error: str) -> None:
             extra={"tenant_id": tenant_id, "agent": agent, "pub_error": str(pub_err)},
         )
 
+# Step 10.2: Decorator for timing nodes
+import time
+from functools import wraps
+
+def time_node(agent_name: str):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(state: dict, *args, **kwargs):
+            start = time.time()
+            try:
+                return func(state, *args, **kwargs)
+            except Exception as e:
+                sdk.observability.metrics.WORKFLOW_ERRORS.labels(
+                    agent_name=agent_name, 
+                    tenant_id=state.get("tenant_id", "unknown")
+                ).inc()
+                raise
+            finally:
+                duration = time.time() - start
+                sdk.observability.metrics.AGENT_EXECUTION_LATENCY.labels(
+                    agent_name=agent_name, 
+                    tenant_id=state.get("tenant_id", "unknown")
+                ).observe(duration)
+        return wrapper
+    return decorator
+
 
 # ---------------------------------------------------------------------------
 # Pipeline nodes
 # ---------------------------------------------------------------------------
 
+@time_node("ProspectAgent")
 def ProspectAgent(state: dict) -> dict:
     """
     Finds prospects using ICP config from the Knowledge Layer.
@@ -118,6 +145,7 @@ def ProspectAgent(state: dict) -> dict:
     return {"prospects": prospects, "current_prospect_index": 0}
 
 
+@time_node("DecisionMakerAgent")
 def DecisionMakerAgent(state: dict) -> dict:
     """
     Finds the decision maker for the current prospect.
@@ -173,6 +201,7 @@ def DecisionMakerAgent(state: dict) -> dict:
     return {"decision_maker": dm}
 
 
+@time_node("ResearchAgent")
 def ResearchAgent(state: dict) -> dict:
     """
     Researches the prospect company and summarizes via AI Gateway.
@@ -246,6 +275,7 @@ def ResearchAgent(state: dict) -> dict:
     return {"research_summary": str(summary)}
 
 
+@time_node("ScoringAgent")
 def ScoringAgent(state: dict) -> dict:
     """
     Scores the prospect using the scoring rubric and AI Gateway.
@@ -321,6 +351,7 @@ def ScoringAgent(state: dict) -> dict:
     return {"score": score, "buying_signal": buying_signal}
 
 
+@time_node("DraftOutreachAgent")
 def DraftOutreachAgent(state: dict) -> dict:
     """
     Generates a personalized outreach email, records it, and requests approval.
@@ -376,6 +407,7 @@ def DraftOutreachAgent(state: dict) -> dict:
     return {"outreach_message": str(message), "outreach_decision_id": decision_id}
 
 
+@time_node("SendOutreachAgent")
 def SendOutreachAgent(state: dict) -> dict:
     """
     Wakes up after Human-in-the-Loop interaction.
@@ -437,6 +469,7 @@ def SendOutreachAgent(state: dict) -> dict:
     return {"email_sent": True}
 
 
+@time_node("FollowUpAgent")
 def FollowUpAgent(state: dict) -> dict:
     """
     Triggers a follow-up if no reply has been received.
@@ -482,6 +515,7 @@ def FollowUpAgent(state: dict) -> dict:
     return {"follow_up_triggered": True}
 
 
+@time_node("MeetingAgent")
 def MeetingAgent(state: dict) -> dict:
     """
     Checks calendar availability and books a meeting by updating the CRM.
@@ -546,6 +580,7 @@ def MeetingAgent(state: dict) -> dict:
     return {"meeting_booked": True, "opportunity_id": opp_id}
 
 
+@time_node("HumanHandoff")
 def HumanHandoff(state: dict) -> dict:
     """
     Records the human handoff and ends the pipeline.
