@@ -1,5 +1,6 @@
 import logging
 import json
+import os
 from platform_core.sdk import sdk
 from business_agents.sales.nodes import FollowUpAgent
 
@@ -21,12 +22,6 @@ def run_tests():
     
     try:
         logger.info("Simulating FollowUpAgent with 'too expensive' objection...")
-        # Note: We temporarily force the AI Gateway to use the real API for this test because
-        # the mock API is hardcoded to return a standard "buying signal" JSON payload,
-        # which won't match our new schema.
-        import os
-        os.environ["USE_MOCK_AI"] = "false"
-        
         result = FollowUpAgent(state)
         
         draft = result.get("follow_up_draft")

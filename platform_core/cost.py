@@ -26,7 +26,7 @@ def get_dashboard_metrics(tenant_id: str) -> dict:
         
         # 2. Cost by Model
         cursor.execute("SELECT model, SUM(cost_usd) FROM decision_cards WHERE tenant_id = %s AND model IS NOT NULL GROUP BY model", (tenant_id,))
-        cost_by_model = {row[0]: float(row[1]) for row in cursor.fetchall()}
+        cost_by_model = {row[0]: float(row[1] or 0.0) for row in cursor.fetchall()}
         
         # 3. Cost Per Lead (Assume every 'find_prospect' creates 1 lead)
         cursor.execute("SELECT COUNT(*) FROM decision_cards WHERE tenant_id = %s AND action = 'find_prospect'", (tenant_id,))

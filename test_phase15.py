@@ -14,9 +14,10 @@ def run_tests():
     
     logger.info("--- Test 1: Decoupled Audit Logs (Step 15.2) ---")
     
+    import sys
     # 1. Start the audit subscriber in the background
     logger.info("Starting audit_subscriber.py in background...")
-    proc = subprocess.Popen(["python", "platform_core/subscribers/audit_subscriber.py"])
+    proc = subprocess.Popen([sys.executable, "-m", "platform_core.subscribers.audit_subscriber"])
     
     # Give it a second to connect to Redis
     time.sleep(2)
@@ -47,7 +48,7 @@ def run_tests():
         if row:
             prompt_saved = row[0]
             logger.info(f"Audit log found! Masked prompt: {prompt_saved}")
-            if "[EMAIL MASKED]" in prompt_saved:
+            if "[REDACTED_EMAIL]" in prompt_saved:
                 logger.info("SUCCESS: The Audit Subscriber correctly intercepted the event via Redis, masked the PII, and wrote it to the database asynchronously!")
             else:
                 logger.error("FAIL: Audit log found, but PII was not masked.")

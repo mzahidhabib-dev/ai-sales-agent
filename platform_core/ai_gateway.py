@@ -211,6 +211,10 @@ def generate(
             provider = fallback_provider
             
         if schema:
+            if "email_draft" in schema.get("properties", {}):
+                # Phase 14 mock support
+                return {"raw": '{"objection_category": "too_expensive", "email_draft": "Our customers typically see a 3x return on investment within 6 months, which offsets the cost."}', "output": {"objection_category": "too_expensive", "email_draft": "Our customers typically see a 3x return on investment within 6 months, which offsets the cost."}, "valid": True, "error": None, "cost_usd": 0.005}
+                
             return {"raw": json.dumps(_MOCK_RESPONSE_JSON), "output": _MOCK_RESPONSE_JSON,
                     "valid": True, "error": None, "cost_usd": 0.005}
         return {"raw": _MOCK_RESPONSE_TEXT, "output": _MOCK_RESPONSE_TEXT,
