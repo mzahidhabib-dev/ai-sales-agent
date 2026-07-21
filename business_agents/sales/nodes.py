@@ -310,7 +310,7 @@ def ScoringAgent(state: dict) -> dict:
     schema = {
         "type": "object",
         "properties": {
-            "score": {"type": "number"},
+            "score": {"type": "number", "description": "The exact integer score from the rubric (e.g., 85, 75, 50, 0). Do not output 0 unless the rubric says 0."},
             "reasons": {"type": "array", "items": {"type": "string"}},
             "buying_signal_detected": {"type": "boolean"},
         },

@@ -26,9 +26,9 @@ def research_company(tenant_id: str, domain: str) -> str:
     use_mcp = os.environ.get("USE_MCP", "false").lower() == "true"
     if use_mcp:
         try:
-            # Command to launch our dummy python MCP server
+            # Command to launch our real python MCP scraper server
             cmd = "python"
-            args = ["scratch/dummy_mcp_server.py"]
+            args = ["workers/web_research_mcp.py"]
             return call_mcp_tool(cmd, args, "research_company", {"tenant_id": tenant_id, "domain": domain})
         except Exception as e:
             logger.error("MCP routing failed", extra={"error": str(e)})

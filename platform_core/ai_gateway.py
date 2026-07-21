@@ -189,7 +189,7 @@ def _generate_anthropic(prompt: str, schema: dict, model_name: str, retries: int
 def generate(
     prompt: str,
     schema: dict = None,
-    model_name: str = "gemini-1.5-flash",
+    model_name: str = "gemini-3.5-flash",
     retries: int = 3,
     provider: str = "gemini",
     fallback_provider: str = "openai"

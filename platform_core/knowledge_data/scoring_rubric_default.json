@@ -1,8 +1,27 @@
 {
-  "threshold": 70,
-  "criteria": {
-    "role_match": { "weight": 30, "description": "Is the person a decision maker?" },
-    "company_match": { "weight": 30, "description": "Does the company match ICP size and industry?" },
-    "buying_signal": { "weight": 40, "description": "Are they hiring, raising money, or showing intent?" }
-  }
+  "ideal_customer_profile": "B2B SaaS companies, Developer Tools, and Automation Platforms.",
+  "scoring_rules": [
+    {
+      "criteria": "The company provides workflow automation, API integration, or low-code/no-code platforms.",
+      "points": 85
+    },
+    {
+      "criteria": "The company builds tools for software developers or manages code/repositories.",
+      "points": 75
+    },
+    {
+      "criteria": "The company is a generic B2B SaaS platform not focused on developers or automation.",
+      "points": 50
+    },
+    {
+      "criteria": "The company is not B2B SaaS, or is a generic/placeholder website.",
+      "points": 0
+    }
+  ],
+  "buying_signals": [
+    "Mentions of scaling engineering teams",
+    "Focus on workflow efficiency",
+    "Self-hosted or open-source offerings",
+    "Enterprise collaboration tools"
+  ]
 }
