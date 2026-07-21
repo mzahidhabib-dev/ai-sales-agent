@@ -37,10 +37,40 @@ def research_company(tenant_id: str, domain: str) -> str:
     return f"{domain} is a growing B2B SaaS company that recently raised Series A."
 
 def send_email(tenant_id: str, to_email: str, subject: str, body: str) -> bool:
-    """Stub: Fakes sending an email."""
+    """Sends an email via n8n webhook. Falls back to stub if URL is missing."""
+    import os
+    import requests
+    
+    webhook_url = os.environ.get("N8N_WEBHOOK_URL")
+    
     # Rule 15: log to_email and subject only — never log email body (PII / content)
-    logger.info("Sending email (stub)", extra={"tenant_id": tenant_id, "to_email": to_email, "subject": subject})
-    return True
+    if not webhook_url:
+        logger.info("Sending email (stub - no N8N_WEBHOOK_URL configured)", extra={"tenant_id": tenant_id, "to_email": to_email, "subject": subject})
+        return True
+        
+    logger.info("Sending email via n8n", extra={"tenant_id": tenant_id, "to_email": to_email, "subject": subject})
+    
+    try:
+        response = requests.post(
+            webhook_url,
+            json={
+                "tenant_id": tenant_id,
+                "to_email": to_email,
+                "subject": subject,
+                "body": body
+            },
+            timeout=10
+        )
+        response.raise_for_status()
+        return True
+    except Exception as e:
+        logger.error("Failed to send email via n8n", extra={
+            "tenant_id": tenant_id, 
+            "to_email": to_email, 
+            "exc_type": type(e).__name__,
+            "error": str(e)
+        })
+        raise
 
 def check_calendar_availability(tenant_id: str) -> list:
     """Stub: Returns fake calendar slots."""
