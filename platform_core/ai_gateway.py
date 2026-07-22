@@ -33,12 +33,26 @@ SECONDS_BETWEEN_GEMINI_CALLS = 60.0 / GEMINI_RPM_LIMIT
 
 
 def _strip_markdown(text: str) -> str:
+    # First, strip common markdown wrappers
     for prefix in ("```json", "```"):
         if text.startswith(prefix):
             text = text[len(prefix):]
     if text.endswith("```"):
         text = text[:-3]
-    return text.strip()
+    text = text.strip()
+    
+    # Robustly parse the FIRST valid JSON object to ignore trailing extra data
+    start = text.find('{')
+    if start != -1:
+        try:
+            import json
+            decoder = json.JSONDecoder()
+            obj, idx = decoder.raw_decode(text[start:])
+            return json.dumps(obj)
+        except Exception:
+            pass
+            
+    return text
 
 
 def _generate_gemini(prompt: str, schema: dict, model_name: str, retries: int) -> dict:
@@ -186,12 +200,61 @@ def _generate_anthropic(prompt: str, schema: dict, model_name: str, retries: int
                 raise RuntimeError(f"Anthropic failed: {e}")
             time.sleep(2 ** attempt)
 
+def _generate_groq(prompt: str, schema: dict, model_name: str, retries: int) -> dict:
+    from groq import Groq
+    
+    _api_key = get_secret("GROQ_API_KEY")
+    client = Groq(api_key=_api_key)
+    
+    if "gemini" in model_name:
+        model_name = "llama-3.1-8b-instant"
+        
+    if schema:
+        prompt += (
+            f"\n\nYou MUST return your response as a valid JSON object matching "
+            f"this schema:\n{json.dumps(schema, indent=2)}\n"
+            "Do not include markdown blocks like ```json."
+        )
+
+    for attempt in range(retries):
+        try:
+            logger.info("Calling Groq API", extra={"model": model_name, "attempt": attempt + 1})
+            kwargs = {
+                "model": model_name,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.2
+            }
+            if schema:
+                kwargs["response_format"] = {"type": "json_object"}
+                
+            response = client.chat.completions.create(**kwargs)
+            raw_text = _strip_markdown(response.choices[0].message.content.strip())
+            check_safety(prompt, raw_text)
+
+            result = {"raw": raw_text, "output": raw_text, "valid": True, "error": None, "cost_usd": 0.0001}
+
+            if schema:
+                try:
+                    result["output"] = json.loads(raw_text)
+                except json.JSONDecodeError as e:
+                    logger.warning("Failed to parse JSON output from Groq", extra={"error": str(e)})
+                    result["valid"] = False
+                    result["error"] = f"JSON parsing failed: {e}"
+
+            return result
+
+        except Exception as e:
+            logger.error("Groq API call failed", extra={"model": model_name, "attempt": attempt + 1, "exc_type": type(e).__name__, "error": str(e)})
+            if attempt == retries - 1:
+                raise RuntimeError(f"Groq failed: {e}")
+            time.sleep(2 ** attempt)
+
 def generate(
     prompt: str,
     schema: dict = None,
     model_name: str = "gemini-3.5-flash",
     retries: int = 3,
-    provider: str = "gemini",
+    provider: str = "groq",
     fallback_provider: str = "openai"
 ) -> dict:
     """
@@ -223,7 +286,8 @@ def generate(
     providers = {
         "gemini": _generate_gemini,
         "openai": _generate_openai,
-        "anthropic": _generate_anthropic
+        "anthropic": _generate_anthropic,
+        "groq": _generate_groq
     }
 
     primary_func = providers.get(provider)
