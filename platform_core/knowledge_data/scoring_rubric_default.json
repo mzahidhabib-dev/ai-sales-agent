@@ -1,27 +1,27 @@
 {
-  "ideal_customer_profile": "B2B SaaS companies, Developer Tools, and Automation Platforms.",
+  "ideal_customer_profile": "Traditional businesses, agencies, e-commerce, real estate, logistics, or non-tech B2B companies that have repetitive manual processes.",
   "scoring_rules": [
     {
-      "criteria": "The company provides workflow automation, API integration, or low-code/no-code platforms.",
+      "criteria": "The company is a traditional business (e.g. real estate, logistics, marketing agency, e-commerce) that likely has high manual operational overhead and could benefit greatly from AI automation.",
       "points": 85
     },
     {
-      "criteria": "The company builds tools for software developers or manages code/repositories.",
+      "criteria": "The company is a general B2B service provider or SaaS that is not specifically focused on AI or automation.",
       "points": 75
     },
     {
-      "criteria": "The company is a generic B2B SaaS platform not focused on developers or automation.",
+      "criteria": "The company builds software tools for developers, but doesn't specialize in automation.",
       "points": 50
     },
     {
-      "criteria": "The company is not B2B SaaS, or is a generic/placeholder website.",
+      "criteria": "The company already builds workflow automation, AI agents, or API integration platforms (e.g. Zapier, Make, n8n, OpenAI). They will not buy our services.",
       "points": 0
     }
   ],
   "buying_signals": [
-    "Mentions of scaling engineering teams",
-    "Focus on workflow efficiency",
-    "Self-hosted or open-source offerings",
-    "Enterprise collaboration tools"
+    "Mentions of scaling operations or struggling with manual work",
+    "Focus on improving customer support or sales efficiency",
+    "Uses multiple different software tools that need connecting",
+    "Desire to reduce operational costs"
   ]
 }

@@ -72,8 +72,9 @@ def _generate_gemini(prompt: str, schema: dict, model_name: str, retries: int) -
 
     if schema:
         prompt += (
-            f"\n\nYou MUST return your response as a valid JSON object matching "
-            f"this schema:\n{json.dumps(schema, indent=2)}\n"
+            f"\n\nYou MUST output a valid JSON object. Use the structure and types defined in this schema, "
+            f"but populate it with the actual values based on your analysis. DO NOT just repeat the schema definition.\n"
+            f"Schema structure:\n{json.dumps(schema, indent=2)}\n"
             "Do not include markdown blocks like ```json."
         )
 
@@ -122,8 +123,9 @@ def _generate_openai(prompt: str, schema: dict, model_name: str, retries: int) -
         
     if schema:
         prompt += (
-            f"\n\nYou MUST return your response as a valid JSON object matching "
-            f"this schema:\n{json.dumps(schema, indent=2)}\n"
+            f"\n\nYou MUST output a valid JSON object. Use the structure and types defined in this schema, "
+            f"but populate it with the actual values based on your analysis. DO NOT just repeat the schema definition.\n"
+            f"Schema structure:\n{json.dumps(schema, indent=2)}\n"
             "Do not include markdown blocks like ```json."
         )
 
@@ -166,8 +168,9 @@ def _generate_anthropic(prompt: str, schema: dict, model_name: str, retries: int
         
     if schema:
         prompt += (
-            f"\n\nYou MUST return your response as a valid JSON object matching "
-            f"this schema:\n{json.dumps(schema, indent=2)}\n"
+            f"\n\nYou MUST output a valid JSON object. Use the structure and types defined in this schema, "
+            f"but populate it with the actual values based on your analysis. DO NOT just repeat the schema definition.\n"
+            f"Schema structure:\n{json.dumps(schema, indent=2)}\n"
             "Do not include markdown blocks like ```json."
         )
 
@@ -211,8 +214,9 @@ def _generate_groq(prompt: str, schema: dict, model_name: str, retries: int) -> 
         
     if schema:
         prompt += (
-            f"\n\nYou MUST return your response as a valid JSON object matching "
-            f"this schema:\n{json.dumps(schema, indent=2)}\n"
+            f"\n\nYou MUST output a valid JSON object. Use the structure and types defined in this schema, "
+            f"but populate it with the actual values based on your analysis. DO NOT just repeat the schema definition.\n"
+            f"Schema structure:\n{json.dumps(schema, indent=2)}\n"
             "Do not include markdown blocks like ```json."
         )
 

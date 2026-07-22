@@ -96,8 +96,8 @@ def _run_pipeline_in_background(tenant_id: str, domain: str, name: str, role: st
         
         score = state.get("score", 0)
         
-        # Step 3: Draft Outreach if Score >= 0 (lowered for testing)
-        if score >= 0:
+        # Step 3: Draft Outreach if Score >= 80
+        if score >= 80:
             state.update(DraftOutreachAgent(state))
             final_status = 'DRAFTED'
         else:
@@ -428,12 +428,20 @@ def approve_decision(decision_id: int, body: Optional[DecisionActionRequest] = N
 
             from platform_core.sdk import sdk
             email_body = new_result if new_result else card.get("result", "")
+            
+            # Extract subject if present
+            subject_line = "Partnership Opportunity - Custom AI Agents & Automation"
+            lines = email_body.split("\n", 1)
+            if lines and lines[0].startswith("Subject: "):
+                subject_line = lines[0].replace("Subject: ", "").strip()
+                email_body = lines[1].strip() if len(lines) > 1 else ""
+                
             # Dispatch via n8n
             sdk.tools.call(
                 "send_email",
                 tenant_id=tenant_id,
                 to_email=target_email,
-                subject="Partnership Opportunity - Custom AI Agents & Automation",
+                subject=subject_line,
                 body=email_body
             )
             

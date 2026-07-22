@@ -246,7 +246,7 @@ def ResearchAgent(state: dict) -> dict:
         memory_context = ""
 
     safe_research = sdk.security.sanitize_input(raw_research)
-    prompt = f"Summarize this research concisely: {safe_research}{memory_context}"
+    prompt = f"Please summarize the following information about a company. Even if the information is very short (like a single sentence), extract the key points about what the company does and return that as the summary. Do not complain about lack of information.\n\nCompany Information:\n{safe_research}{memory_context}"
     ai_res = sdk.ai.generate(prompt)
 
     # Rule 9/12: Must check valid before using output
@@ -308,7 +308,7 @@ def ScoringAgent(state: dict) -> dict:
         _publish_failure(tenant_id, agent, f"Failed to load scoring rubric: {e}")
         raise
 
-    prompt = f"Score this prospect based on the rubric. Rubric: {rubric}. Research: {summary}"
+    prompt = f"Please score this prospect based on the provided rubric.\n\nRubric:\n{rubric}\n\nResearch:\n{summary}\n\nAnalyze the research against the rubric and determine the exact score."
     schema = {
         "type": "object",
         "properties": {
@@ -384,7 +384,17 @@ def DraftOutreachAgent(state: dict) -> dict:
         f"Use this research summary about their company to tailor the pitch to their specific business needs: {summary}. "
         f"Keep the email concise, punchy, professional, and end with a soft call to action for a 15-minute intro call. Do not use generic placeholders."
     )
-    ai_res = sdk.ai.generate(prompt)
+    
+    schema = {
+        "type": "object",
+        "properties": {
+            "subject": {"type": "string", "description": "The email subject line, without 'Subject:' prefix"},
+            "body": {"type": "string", "description": "The main body of the email"}
+        },
+        "required": ["subject", "body"]
+    }
+    
+    ai_res = sdk.ai.generate(prompt, schema=schema)
 
     if not ai_res.get("valid"):
         err = f"Email generation AI output invalid: {ai_res.get('error')}"
@@ -393,7 +403,12 @@ def DraftOutreachAgent(state: dict) -> dict:
         _publish_failure(tenant_id, agent, err)
         raise RuntimeError(f"{agent}: {err}")
 
-    message = ai_res["output"]
+    # Format it as a single string for the dashboard text area
+    output_dict = ai_res["output"]
+    if isinstance(output_dict, dict) and "subject" in output_dict and "body" in output_dict:
+        message = f"Subject: {output_dict['subject']}\n\n{output_dict['body']}"
+    else:
+        message = str(ai_res["output"])
 
     try:
         # We manually pass a low confidence here so Phase 7 testing hits the threshold!
@@ -406,7 +421,7 @@ def DraftOutreachAgent(state: dict) -> dict:
             result=str(message),
             confidence=0.5,  # < 0.8, so it will automatically trigger approval
             cost_usd=ai_res.get("cost_usd"),
-            prospect_id=state.get("prospect_id")
+            prospect_id=state.get("prospects", [{}])[state.get("current_prospect_index", 0)].get("prospect_id")
         )
         decision = sdk.decisions.get_decision(decision_id)
         if decision.get("approval_status") == "PENDING_APPROVAL":

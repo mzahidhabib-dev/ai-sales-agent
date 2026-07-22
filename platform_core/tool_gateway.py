@@ -22,19 +22,14 @@ def research_company(tenant_id: str, domain: str) -> str:
     import os
     from platform_core.mcp_client import call_mcp_tool
     
-    # Check if we should use the real MCP server or the mock
-    use_mcp = os.environ.get("USE_MCP", "false").lower() == "true"
-    if use_mcp:
-        try:
-            # Command to launch our real python MCP scraper server
-            cmd = "python"
-            args = ["workers/web_research_mcp.py"]
-            return call_mcp_tool(cmd, args, "research_company", {"tenant_id": tenant_id, "domain": domain})
-        except Exception as e:
-            logger.error("MCP routing failed", extra={"error": str(e)})
-            raise
-    
-    return f"{domain} is a growing B2B SaaS company that recently raised Series A."
+    try:
+        # Command to launch our real python MCP scraper server
+        cmd = "python"
+        args = ["workers/web_research_mcp.py"]
+        return call_mcp_tool(cmd, args, "research_company", {"tenant_id": tenant_id, "domain": domain})
+    except Exception as e:
+        logger.error("MCP routing failed", extra={"error": str(e)})
+        raise
 
 def send_email(tenant_id: str, to_email: str, subject: str, body: str) -> bool:
     """Sends an email via n8n webhook. Falls back to stub if URL is missing."""
