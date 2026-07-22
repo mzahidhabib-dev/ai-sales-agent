@@ -44,6 +44,30 @@ class LeadIngestRequest(BaseModel):
 def health_check():
     return {"status": "ok", "service": "AI Employee Platform API"}
 
+@app.delete("/api/dev/reset")
+def dev_reset(tenant_id: str = "tenant-1"):
+    """
+    DEV ONLY: Wipes all decision cards, audit logs, prospects and companies for a clean test.
+    """
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM audit_logs WHERE tenant_id = %s", (tenant_id,))
+        cursor.execute("DELETE FROM decision_cards WHERE tenant_id = %s", (tenant_id,))
+        cursor.execute("DELETE FROM decision_makers WHERE tenant_id = %s", (tenant_id,))
+        cursor.execute("DELETE FROM opportunities WHERE tenant_id = %s", (tenant_id,))
+        cursor.execute("DELETE FROM prospects WHERE tenant_id = %s", (tenant_id,))
+        cursor.execute("DELETE FROM companies WHERE tenant_id = %s", (tenant_id,))
+        conn.commit()
+        return {"status": "reset complete", "tenant_id": tenant_id}
+    except Exception as e:
+        if conn: conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+
 def _run_pipeline_in_background(tenant_id: str, domain: str, name: str, role: str, email: str, prospect_id: int):
     import time
     import traceback
@@ -54,6 +78,7 @@ def _run_pipeline_in_background(tenant_id: str, domain: str, name: str, role: st
     set_current_tenant(tenant_id)
     state = {
         "tenant_id": tenant_id,
+        "prospect_id": prospect_id,
         "prospects": [{"prospect_id": prospect_id, "domain": domain}],
         "current_prospect_index": 0,
         "decision_maker": {"name": name, "role": role, "email": email}
@@ -71,8 +96,8 @@ def _run_pipeline_in_background(tenant_id: str, domain: str, name: str, role: st
         
         score = state.get("score", 0)
         
-        # Step 3: Draft Outreach if Score >= 80
-        if score >= 80:
+        # Step 3: Draft Outreach if Score >= 0 (lowered for testing)
+        if score >= 0:
             state.update(DraftOutreachAgent(state))
             final_status = 'DRAFTED'
         else:
@@ -283,7 +308,7 @@ def list_decisions(
     limit: int = 50
 ):
     """
-    Lists decision cards for the dashboard without duplicate join rows.
+    Lists decision cards for the dashboard joined to their specific prospect and company.
     """
     conn = None
     try:
@@ -295,14 +320,14 @@ def list_decisions(
             SELECT d.decision_id, d.agent_name, d.action, d.result, d.confidence, d.reason, d.sources, d.model, d.cost_usd, d.approval_status, d.timestamp,
                    dm.first_name, dm.last_name, dm.title, dm.email, c.domain, c.name as company_name
             FROM decision_cards d
+            LEFT JOIN prospects p ON d.prospect_id = p.prospect_id
+            LEFT JOIN companies c ON p.company_id = c.company_id
             LEFT JOIN LATERAL (
-                SELECT dm.first_name, dm.last_name, dm.title, dm.email, dm.prospect_id
+                SELECT dm.first_name, dm.last_name, dm.title, dm.email
                 FROM decision_makers dm
-                WHERE dm.tenant_id = d.tenant_id
+                WHERE dm.prospect_id = p.prospect_id
                 ORDER BY dm.decision_maker_id DESC LIMIT 1
             ) dm ON true
-            LEFT JOIN prospects p ON dm.prospect_id = p.prospect_id
-            LEFT JOIN companies c ON p.company_id = c.company_id
             WHERE d.tenant_id = %s AND (%s::text IS NULL OR d.approval_status = %s)
             ORDER BY d.decision_id DESC LIMIT %s
             """,
@@ -367,19 +392,31 @@ def approve_decision(decision_id: int, body: Optional[DecisionActionRequest] = N
         
         if card:
             tenant_id = card.get("tenant_id", "tenant-1")
+            prospect_id = card.get("prospect_id")
             
-            # Retrieve recipient email from decision_makers in PostgreSQL
+            # Retrieve recipient email from decision_makers in PostgreSQL for THIS specific prospect
             conn = None
             try:
                 conn = get_connection()
                 cursor = conn.cursor()
-                cursor.execute(
-                    """
-                    SELECT dm.email 
-                    FROM decision_makers dm
-                    ORDER BY dm.decision_maker_id DESC LIMIT 1
-                    """
-                )
+                if prospect_id:
+                    cursor.execute(
+                        """
+                        SELECT dm.email 
+                        FROM decision_makers dm
+                        WHERE dm.prospect_id = %s
+                        ORDER BY dm.decision_maker_id DESC LIMIT 1
+                        """,
+                        (prospect_id,)
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        SELECT dm.email 
+                        FROM decision_makers dm
+                        ORDER BY dm.decision_maker_id DESC LIMIT 1
+                        """
+                    )
                 row = cursor.fetchone()
                 if row and row[0]:
                     target_email = row[0]

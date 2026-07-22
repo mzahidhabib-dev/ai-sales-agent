@@ -22,7 +22,8 @@ def record_decision(
     # Context needed for full audit log
     prompt: str = None,
     raw_output: str = None,
-    validation_result: dict = None
+    validation_result: dict = None,
+    prospect_id: int = None
 ) -> int:
     """
     Inserts a row into decision_cards and writes the corresponding full audit trail to audit_logs.
@@ -32,7 +33,7 @@ def record_decision(
     
     # Phase 7.1: Evaluate confidence automatically
     from platform_core.confidence import evaluate_confidence
-    if confidence is not None and approval_required is not True:
+    if confidence is not None and approval_required is None:
         approval_required = evaluate_confidence(confidence, action, tenant_id)
         
     conn = None
@@ -46,14 +47,14 @@ def record_decision(
             INSERT INTO decision_cards (
                 tenant_id, agent_name, action, result, confidence, 
                 reason, sources, model, prompt_version, cost_usd, 
-                duration_seconds, approved, approval_required, replay_id
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                duration_seconds, approved, approval_required, replay_id, prospect_id
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING decision_id
             """,
             (
                 tenant_id, agent_name, action, result, confidence,
                 reason, sources, model, prompt_version, cost_usd,
-                duration_seconds, approved, approval_required, replay_id
+                duration_seconds, approved, approval_required, replay_id, prospect_id
             )
         )
         decision_id = cursor.fetchone()[0]

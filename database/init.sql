@@ -73,7 +73,8 @@ CREATE TABLE decision_cards (
     approval_required BOOLEAN,
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     replay_id VARCHAR(255),
-    approval_status VARCHAR(50) DEFAULT 'NOT_REQUIRED'
+    approval_status VARCHAR(50) DEFAULT 'NOT_REQUIRED',
+    prospect_id INT REFERENCES prospects(prospect_id) ON DELETE CASCADE
 );
 
 CREATE TABLE events (
