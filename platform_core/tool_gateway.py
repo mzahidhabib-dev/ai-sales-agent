@@ -45,9 +45,17 @@ def send_email(tenant_id: str, to_email: str, subject: str, body: str) -> bool:
     
     # Rule 15: log to_email and subject only — never log email body (PII / content)
     if not webhook_url:
+        print(f"\n[EMAIL DISPATCH STUB] No N8N_WEBHOOK_URL in .env. Would send email to: {to_email}\n")
         logger.info("Sending email (stub - no N8N_WEBHOOK_URL configured)", extra={"tenant_id": tenant_id, "to_email": to_email, "subject": subject})
         return True
         
+    print(f"\n==================================================")
+    print(f"🚀 DISPATCHING EMAIL VIA N8N WEBHOOK")
+    print(f"To: {to_email}")
+    print(f"Subject: {subject}")
+    print(f"Webhook URL: {webhook_url}")
+    print(f"==================================================\n")
+    
     logger.info("Sending email via n8n", extra={"tenant_id": tenant_id, "to_email": to_email, "subject": subject})
     
     try:
@@ -62,8 +70,10 @@ def send_email(tenant_id: str, to_email: str, subject: str, body: str) -> bool:
             timeout=10
         )
         response.raise_for_status()
+        print(f"✅ EMAIL DISPATCH SUCCESSFUL! Status Code: {response.status_code}\n")
         return True
     except Exception as e:
+        print(f"❌ EMAIL DISPATCH FAILED: {e}\n")
         logger.error("Failed to send email via n8n", extra={
             "tenant_id": tenant_id, 
             "to_email": to_email, 

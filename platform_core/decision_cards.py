@@ -58,6 +58,16 @@ def record_decision(
         )
         decision_id = cursor.fetchone()[0]
 
+        # Synchronously write to audit_logs for immediate visibility on Dashboard
+        val_res_str = json.dumps(validation_result) if validation_result else "{}"
+        cursor.execute(
+            """
+            INSERT INTO audit_logs (decision_id, tenant_id, agent_name, prompt, model, raw_output, validation_result)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (decision_id, tenant_id, agent_name, prompt or "", model or "groq-free", raw_output or result or "", val_res_str)
+        )
+
         conn.commit()
         
         # Publish the event so the audit subscriber can pick it up
@@ -139,7 +149,7 @@ def resolve_approval(decision_id: int, status: str, new_result: str = None) -> N
         status: One of 'APPROVED', 'REJECTED', 'EDITED'.
         new_result: If 'EDITED', the human-provided new result string.
     """
-    valid_statuses = {"APPROVED", "REJECTED", "EDITED"}
+    valid_statuses = {"APPROVED", "REJECTED", "EDITED", "EDITED_PENDING"}
     if status not in valid_statuses:
         raise ValueError(f"Invalid approval status. Must be one of {valid_statuses}")
         
@@ -152,7 +162,7 @@ def resolve_approval(decision_id: int, status: str, new_result: str = None) -> N
         conn = get_connection()
         cursor = conn.cursor()
         
-        if status == "EDITED" and new_result is not None:
+        if new_result is not None:
             cursor.execute(
                 "UPDATE decision_cards SET approval_status = %s, result = %s WHERE decision_id = %s",
                 (status, new_result, decision_id)

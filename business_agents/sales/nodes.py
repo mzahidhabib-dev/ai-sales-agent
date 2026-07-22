@@ -373,7 +373,13 @@ def DraftOutreachAgent(state: dict) -> dict:
     dm = state["decision_maker"]
     summary = state["research_summary"]
 
-    prompt = f"Write a cold email to {dm.get('first_name')}. Context: {summary}"
+    prompt = (
+        f"You are an expert Full-Stack Developer specializing in custom AI Agent development and workflow automation. "
+        f"Write a highly personalized, compelling B2B cold email to {dm.get('name', 'Executive')} ({dm.get('role', 'Leader')}). "
+        f"Offer custom AI Agent development and automated workflow solutions designed to save their business time, streamline operations, and eliminate manual tasks. "
+        f"Use this research summary about their company to tailor the pitch to their specific business needs: {summary}. "
+        f"Keep the email concise, punchy, professional, and end with a soft call to action for a 15-minute intro call. Do not use generic placeholders."
+    )
     ai_res = sdk.ai.generate(prompt)
 
     if not ai_res.get("valid"):

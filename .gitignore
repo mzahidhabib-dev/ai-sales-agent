@@ -30,7 +30,7 @@ test_phase16.py
 test_phase17.py
 test_phase18.py
 test_n8n_email.py
-
+.env.example
 
 # Python
 __pycache__/
