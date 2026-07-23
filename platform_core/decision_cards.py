@@ -147,10 +147,10 @@ def resolve_approval(decision_id: int, status: str, new_result: str = None) -> N
     
     Args:
         decision_id: The ID of the decision card.
-        status: One of 'APPROVED', 'REJECTED', 'EDITED'.
+        status: One of 'APPROVED', 'REJECTED', 'EDITED', 'DISPATCHING', 'SENT', 'FAILED'.
         new_result: If 'EDITED', the human-provided new result string.
     """
-    valid_statuses = {"APPROVED", "REJECTED", "EDITED", "EDITED_PENDING"}
+    valid_statuses = {"APPROVED", "REJECTED", "EDITED", "EDITED_PENDING", "DISPATCHING", "SENT", "FAILED"}
     if status not in valid_statuses:
         raise ValueError(f"Invalid approval status. Must be one of {valid_statuses}")
         
@@ -162,6 +162,14 @@ def resolve_approval(decision_id: int, status: str, new_result: str = None) -> N
     try:
         conn = get_connection()
         cursor = conn.cursor()
+        
+        # Idempotency check: prevent double-dispatch
+        cursor.execute("SELECT approval_status FROM decision_cards WHERE decision_id = %s FOR UPDATE", (decision_id,))
+        row = cursor.fetchone()
+        if row:
+            current_status = row[0]
+            if status == "DISPATCHING" and current_status in ["DISPATCHING", "SENT"]:
+                raise ValueError("Idempotency violation: This card is already dispatching or sent.")
         
         if new_result is not None:
             cursor.execute(

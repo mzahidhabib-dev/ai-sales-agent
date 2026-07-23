@@ -282,7 +282,7 @@ def get_stats(tenant_id: str = "tenant-1"):
         pending_approvals = cursor.fetchone()[0]
         
         # Approved / Sent
-        cursor.execute("SELECT COUNT(*) FROM decision_cards WHERE tenant_id = %s AND approval_status IN ('APPROVED', 'EDITED')", (tenant_id,))
+        cursor.execute("SELECT COUNT(*) FROM decision_cards WHERE tenant_id = %s AND approval_status IN ('APPROVED', 'EDITED', 'DISPATCHING', 'SENT')", (tenant_id,))
         approved_count = cursor.fetchone()[0]
 
         # Total Cost
@@ -383,7 +383,7 @@ def approve_decision(decision_id: int, body: Optional[DecisionActionRequest] = N
     """
     try:
         new_result = body.edited_result if body else None
-        status = "EDITED" if new_result else "APPROVED"
+        status = "DISPATCHING"
         resolve_approval(decision_id, status, new_result=new_result)
         
         # Fetch decision card details to send the email
@@ -436,14 +436,21 @@ def approve_decision(decision_id: int, body: Optional[DecisionActionRequest] = N
                 subject_line = lines[0].replace("Subject: ", "").strip()
                 email_body = lines[1].strip() if len(lines) > 1 else ""
                 
+            # Format newlines as HTML breaks for n8n Gmail node
+            formatted_body = email_body.replace("\n", "<br>")
+                
             # Dispatch via n8n
-            sdk.tools.call(
-                "send_email",
-                tenant_id=tenant_id,
-                to_email=target_email,
-                subject=subject_line,
-                body=email_body
-            )
+            try:
+                sdk.tools.call(
+                    "send_email",
+                    tenant_id=tenant_id,
+                    to_email=target_email,
+                    subject=subject_line,
+                    body=formatted_body
+                )
+            except Exception as e:
+                resolve_approval(decision_id, "FAILED")
+                raise e
             
         return {
             "status": "success", 
@@ -502,3 +509,19 @@ def get_audit_trail(tenant_id: str = "tenant-1", limit: int = 50):
     finally:
         if conn:
             conn.close()
+
+class N8NDeliveryWebhook(BaseModel):
+    decision_id: int
+    status: str
+    error_message: Optional[str] = None
+
+@app.post("/api/webhooks/n8n/delivery")
+def n8n_delivery_webhook(payload: N8NDeliveryWebhook):
+    """
+    Webhook for n8n to call after attempting to send an email.
+    """
+    try:
+        resolve_approval(payload.decision_id, payload.status)
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

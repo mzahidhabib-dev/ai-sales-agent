@@ -1,13 +1,13 @@
 {
-  "ideal_customer_profile": "Traditional businesses, agencies, e-commerce, real estate, logistics, or non-tech B2B companies that have repetitive manual processes.",
+  "ideal_customer_profile": "B2B Service Businesses, traditional businesses, software development agencies, IT services, consulting firms, marketing agencies, accounting firms, and logistics companies with repetitive manual processes.",
   "scoring_rules": [
     {
-      "criteria": "The company is a traditional business (e.g. real estate, logistics, marketing agency, e-commerce) that likely has high manual operational overhead and could benefit greatly from AI automation.",
+      "criteria": "The company is a B2B service business or traditional business (e.g. accounting, IT services, software development agency, consulting firm, real estate, logistics, marketing agency) that likely has high manual operational overhead and could benefit greatly from AI automation.",
       "points": 85
     },
     {
-      "criteria": "The company is a general B2B service provider or SaaS that is not specifically focused on AI or automation.",
-      "points": 75
+      "criteria": "The company is a SaaS business or general B2B provider that is not specifically focused on AI or automation.",
+      "points": 85
     },
     {
       "criteria": "The company builds software tools for developers, but doesn't specialize in automation.",
