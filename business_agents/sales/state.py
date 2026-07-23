@@ -16,6 +16,9 @@ class PipelineState(TypedDict):
     # Set by ResearchAgent
     research_summary: Optional[str]
     
+    # Set by OpportunityAgent
+    opportunity_detection: Optional[str]
+    
     # Set by ScoringAgent
     score: Optional[float]
     buying_signal: Optional[bool]

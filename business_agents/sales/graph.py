@@ -6,6 +6,7 @@ from business_agents.sales.nodes import (
     ProspectAgent,
     DecisionMakerAgent,
     ResearchAgent,
+    OpportunityAgent,
     ScoringAgent,
     DraftOutreachAgent,
     SendOutreachAgent,
@@ -22,6 +23,7 @@ def create_sales_graph():
     builder.add_node("ProspectAgent", ProspectAgent)
     builder.add_node("DecisionMakerAgent", DecisionMakerAgent)
     builder.add_node("ResearchAgent", ResearchAgent)
+    builder.add_node("OpportunityAgent", OpportunityAgent)
     builder.add_node("ScoringAgent", ScoringAgent)
     builder.add_node("DraftOutreachAgent", DraftOutreachAgent)
     builder.add_node("SendOutreachAgent", SendOutreachAgent)
@@ -34,7 +36,8 @@ def create_sales_graph():
     
     builder.add_edge("ProspectAgent", "DecisionMakerAgent")
     builder.add_edge("DecisionMakerAgent", "ResearchAgent")
-    builder.add_edge("ResearchAgent", "ScoringAgent")
+    builder.add_edge("ResearchAgent", "OpportunityAgent")
+    builder.add_edge("OpportunityAgent", "ScoringAgent")
     
     builder.add_edge("ScoringAgent", "DraftOutreachAgent")
     builder.add_edge("DraftOutreachAgent", "SendOutreachAgent")

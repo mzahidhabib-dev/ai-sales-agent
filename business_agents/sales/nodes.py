@@ -326,6 +326,98 @@ def ResearchAgent(state: dict) -> dict:
     return {"research_summary": str(summary)}
 
 
+@time_node("OpportunityAgent")
+def OpportunityAgent(state: dict) -> dict:
+    """
+    Identifies specific business pain points and automation opportunities.
+
+    Required state keys: tenant_id, prospects, current_prospect_index, research_summary
+    Sets state keys:     opportunity_detection
+    """
+    _require(state, "tenant_id", "prospects", "research_summary")
+    tenant_id = state["tenant_id"]
+    agent = "OpportunityAgent"
+    summary = state["research_summary"]
+    
+    idx = state.get("current_prospect_index", 0)
+    prospect_id = state["prospects"][idx].get("prospect_id")
+
+    prompt = (
+        f"Based on the following research summary, identify a specific operational pain point "
+        f"and propose a custom AI automation solution or agent that could solve it. "
+        f"Explain why they need this based on evidence, and provide a recommended angle for cold outreach.\n\n"
+        f"Research:\n{summary}"
+    )
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "opportunity": {"type": "string", "description": "The specific AI automation service to pitch"},
+            "evidence": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Proof from the research supporting this opportunity"
+            },
+            "business_pain": {"type": "string", "enum": ["High", "Medium", "Low"]},
+            "confidence": {"type": "integer", "description": "0-100 score of how likely they need this"},
+            "recommended_angle": {"type": "string", "description": "How to approach the email pitch"}
+        },
+        "required": ["opportunity", "evidence", "business_pain", "confidence", "recommended_angle"]
+    }
+
+    # Rate limit protection (AGENTS.md Rule 16 Override)
+    import time
+    time.sleep(2)
+
+    ai_res = sdk.ai.generate(prompt, schema=schema)
+
+    if not ai_res.get("valid") or not isinstance(ai_res.get("output"), dict):
+        err = f"Opportunity AI output invalid: {ai_res.get('error')}"
+        logger.error("OpportunityAgent: AI Gateway returned invalid response",
+                     extra={"tenant_id": tenant_id, "ai_error": ai_res.get("error")})
+        _publish_failure(tenant_id, agent, err)
+        raise RuntimeError(f"OpportunityAgent: {err}")
+
+    # Format the structured JSON into a Markdown string for the DB/UI
+    output_dict = ai_res["output"]
+    opp = output_dict.get("opportunity", "Unknown Opportunity")
+    pain = output_dict.get("business_pain", "Unknown")
+    conf = output_dict.get("confidence", 0)
+    angle = output_dict.get("recommended_angle", "General outreach")
+    evidence = output_dict.get("evidence", [])
+
+    formatted_opp = f"**Opportunity Detected:** {opp}\n"
+    formatted_opp += f"**Confidence:** {conf}% | **Pain Level:** {pain}\n"
+    formatted_opp += "**Evidence:**\n"
+    for e in evidence:
+        formatted_opp += f"- {e}\n"
+    formatted_opp += f"\n**Recommended Angle:** {angle}"
+
+    try:
+        sdk.decisions.record_decision(
+            tenant_id=tenant_id,
+            agent_name=agent,
+            action="detect_opportunity",
+            prompt=prompt,
+            raw_output=ai_res.get("raw"),
+            result=formatted_opp,
+            confidence=conf / 100.0,
+            cost_usd=ai_res.get("cost_usd"),
+            approval_required=False,
+            prospect_id=prospect_id
+        )
+    except Exception as e:
+        logger.error(
+            "OpportunityAgent: record_decision failed",
+            extra={"tenant_id": tenant_id, "exc_type": type(e).__name__, "error": str(e)},
+        )
+        _publish_failure(tenant_id, agent, f"record_decision failed: {e}")
+        raise
+
+    sdk.events.publish(tenant_id, "opportunity.detected", {"opportunity": opp})
+    return {"opportunity_detection": formatted_opp}
+
+
 @time_node("ScoringAgent")
 def ScoringAgent(state: dict) -> dict:
     """
@@ -344,6 +436,7 @@ def ScoringAgent(state: dict) -> dict:
     tenant_id = state["tenant_id"]
     agent = "ScoringAgent"
     summary = state["research_summary"]
+    opp_det = state.get("opportunity_detection", "")
 
     try:
         rubric = sdk.knowledge.get("scoring_rubric", tenant_id)
@@ -351,7 +444,7 @@ def ScoringAgent(state: dict) -> dict:
         _publish_failure(tenant_id, agent, f"Failed to load scoring rubric: {e}")
         raise
 
-    prompt = f"Please score this prospect based on the provided rubric.\n\nRubric:\n{rubric}\n\nResearch:\n{summary}\n\nAnalyze the research against the rubric and determine the exact score."
+    prompt = f"Please score this prospect based on the provided rubric.\n\nRubric:\n{rubric}\n\nResearch:\n{summary}\n\nOpportunity Identified:\n{opp_det}\n\nAnalyze the research and the opportunity against the rubric and determine the exact score."
     schema = {
         "type": "object",
         "properties": {
@@ -419,12 +512,14 @@ def DraftOutreachAgent(state: dict) -> dict:
     agent = "DraftOutreachAgent"
     dm = state["decision_maker"]
     summary = state["research_summary"]
+    opp_det = state.get("opportunity_detection", "No specific opportunity detected.")
 
     prompt = (
         f"You are an expert Full-Stack Developer specializing in custom AI Agent development and workflow automation. "
         f"Write a highly personalized, compelling B2B cold email to {dm.get('name', 'Executive')} ({dm.get('role', 'Leader')}). "
         f"Offer custom AI Agent development and automated workflow solutions designed to save their business time, streamline operations, and eliminate manual tasks. "
-        f"Use this research summary about their company to tailor the pitch to their specific business needs: {summary}. "
+        f"Use this research summary: {summary}. "
+        f"Crucially, pitch this specific opportunity and use the recommended angle: \n{opp_det}\n"
         f"Keep the email concise, punchy, professional, and end with a soft call to action for a 15-minute intro call. Do not use generic placeholders."
     )
     

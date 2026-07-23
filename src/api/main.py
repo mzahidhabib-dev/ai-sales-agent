@@ -90,6 +90,11 @@ def _run_pipeline_in_background(tenant_id: str, domain: str, name: str, role: st
         state.update(ResearchAgent(state))
         time.sleep(15) # Sleep delay for free tier API rate limits
         
+        # Step 1.5: Opportunity Detection
+        from business_agents.sales.nodes import OpportunityAgent
+        state.update(OpportunityAgent(state))
+        time.sleep(15)
+        
         # Step 2: Score
         state.update(ScoringAgent(state))
         time.sleep(15)
