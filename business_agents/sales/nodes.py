@@ -246,18 +246,61 @@ def ResearchAgent(state: dict) -> dict:
         memory_context = ""
 
     safe_research = sdk.security.sanitize_input(raw_research)
-    prompt = f"Please summarize the following information about a company. Even if the information is very short (like a single sentence), extract the key points about what the company does and return that as the summary. Do not complain about lack of information.\n\nCompany Information:\n{safe_research}{memory_context}"
-    ai_res = sdk.ai.generate(prompt)
+    prompt = (
+        f"Analyze the following company information and extract the key claims about what the company does, "
+        f"its pain points, and its automation opportunities. For every claim, you MUST extract the source URL "
+        f"and provide your confidence level (High, Medium, Low).\n\n"
+        f"Company Information:\n{safe_research}{memory_context}"
+    )
+    
+    schema = {
+        "type": "object",
+        "properties": {
+            "summary": {"type": "string", "description": "A 2-3 sentence overview of the company"},
+            "claims": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "claim": {"type": "string", "description": "The specific fact or observation"},
+                        "source_url": {"type": "string", "description": "The exact URL where this claim was found"},
+                        "timestamp": {"type": "string", "description": "YYYY-MM-DD"},
+                        "confidence": {"type": "string", "enum": ["High", "Medium", "Low"]}
+                    },
+                    "required": ["claim", "source_url", "timestamp", "confidence"]
+                }
+            }
+        },
+        "required": ["summary", "claims"]
+    }
+    
+    # Rate limit protection (AGENTS.md Rule 16 Override)
+    time.sleep(2)
+    
+    ai_res = sdk.ai.generate(prompt, schema=schema)
 
     # Rule 9/12: Must check valid before using output
-    if not ai_res.get("valid"):
+    if not ai_res.get("valid") or not isinstance(ai_res.get("output"), dict):
         err = f"AI summary failed: {ai_res.get('error')}"
         logger.error("ResearchAgent: AI Gateway returned invalid response",
                      extra={"tenant_id": tenant_id, "ai_error": ai_res.get("error")})
         _publish_failure(tenant_id, agent, err)
         raise RuntimeError(f"ResearchAgent: {err}")
 
-    summary = ai_res["output"]
+    # Format the structured JSON into a Markdown string for the DB/UI
+    output_dict = ai_res["output"]
+    summary_text = output_dict.get("summary", "No summary available.")
+    claims_list = output_dict.get("claims", [])
+    
+    formatted_summary = f"{summary_text}\n\n**Key Evidence:**\n"
+    for c in claims_list:
+        claim_text = c.get('claim', 'Unknown claim')
+        source_url = c.get('source_url', 'Unknown source')
+        timestamp = c.get('timestamp', 'Unknown date')
+        confidence = c.get('confidence', 'Low')
+        formatted_summary += f"- {claim_text} (Source: {source_url} | {timestamp} | Confidence: {confidence})\n"
+
+    summary = formatted_summary
 
     try:
         sdk.decisions.record_decision(
